@@ -2,7 +2,7 @@
 
 `Assets/Scenes/Main.unity` を Play すると、Main Camera の映像を **HighwaySurfing.Main** として Spout に送信します。
 既定は **1920 × 1080 / 不透明映像**。Unity の Game View の大きさを変更しても送信解像度は変わりません。
-Game View には同じ映像を縦横比を保って表示します。画面上の操作 HUD は送信映像に含めません。
+Game View には同じ映像を縦横比を保って表示します。参加者向けの開始案内は送信映像に含み、運営者用の操作 HUD は含めません。
 
 ## OBS
 
@@ -16,7 +16,7 @@ OBS 上のプラグイン読み込み・実際のプロジェクター投影は�
 ソースが現れない場合は、使用中の OBS に対応した [OBS Spout2 Plugin](https://github.com/Off-World-Live/obs-spout2-plugin) を確認します。
 
 Unity 内の一時的な SpoutReceiver で、ネイティブ送信元の列挙、1920×1080 の受信画像、
-時間経過による画像の更新、HUDが含まれないことを確認済みです。
+時間経過による画像の更新、運営者用HUDが含まれないことを確認済みです。自動開始チュートリアルの日本語と姿勢図を含む受信画像も確認しました。
 出力コンポーネントの停止時には送信元が消え、カメラの出力先が元に戻り、再開後も受信できました。
 OBS での受信・実際の投影は未検証です。
 
@@ -38,7 +38,8 @@ Stop / コンポーネント無効化時は送信を止め、カメラの元の�
 ## 技術構成
 
 - [KlakSpout](https://github.com/keijiro/KlakSpout) **2.0.6** を公式 Git リポジトリのコミット `849e7bca3c167839ed697796153e1749acf0c53f` に固定。
-- Main Camera → sRGB ARGB32 RenderTexture → KlakSpout Texture sender。URP のポストプロセスを含みます。
+- Main Camera → sRGB ARGB32 RenderTexture → KlakSpout Texture sender。走行中はURPのポストプロセスを含みます。開始案内中は文字の可読性のため一時停止します。
+- 参加者向けのPlayerTutorialはScreen Space Cameraで描画し、出力映像に含みます。
 - Game View のプレビューと操作 HUD は Screen Space Overlay。出力カメラには入りません。
 - Windows / Direct3D 11 または 12 が必要です。このプロジェクトの Editor は Direct3D 12。
 - 黒い映像になる場合は Unity と OBS が同じ GPU を使用しているか確認します。特に内蔵 GPU + NVIDIA GPU のノート PC で重要です。

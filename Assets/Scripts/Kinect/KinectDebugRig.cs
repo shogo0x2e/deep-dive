@@ -26,6 +26,7 @@ namespace HighwaySurfing.Kinect
         [Min(0)] public float BodySwitchDelay = .5f;
         [Min(0)] public float BodyLostGrace = .75f;
         public bool LockSelectedPerson;
+        public bool EnableKeyboardShortcuts = true;
         [Header("Steering")]
         [Range(0, 12)] public float DeadZoneDegrees = 3;
         [Range(5, 35)] public float FullScaleDegrees = 18;
@@ -44,6 +45,11 @@ namespace HighwaySurfing.Kinect
         public bool IsTracked { get; private set; }
         public bool Calibrated => solver.Calibrated;
         public bool Calibrating => calibrating;
+        public bool SelectedBodyPresent => bodyAvailable && float.IsFinite(ResultAgeMs) && ResultAgeMs <= MaximumFrameAge * 1000;
+        public bool SurfPoseReady => IsTracked && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 &&
+            SurfPoseDetector.IsOpen(Joints[0].position, Joints[2].position, Joints[5].position, Joints[12].position,
+                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right);
+        public string CalibrationFeedback { get; private set; } = "";
         public float CalibrationProgress => calibrating ? Mathf.Clamp01((Time.unscaledTime - calibrationStarted) / 1.5f) : 0;
         public float RawDegrees => solver.RawDegrees;
         public float MeasuredDegrees { get; private set; }
@@ -150,17 +156,19 @@ namespace HighwaySurfing.Kinect
         public void FlipSide()
         { OppositeSide = !OppositeSide; ApplyPreset(SensorPlacement == Placement.Custom ? 1 : (int)SensorPlacement); }
         public void ReleaseBody()
-        { ResetTracking(); Status = "Released body - waiting for exactly one participant"; }
+        { ResetTracking(); Status = "Released body - waiting for nearest participant"; }
         public void BeginCalibration()
         {
-            if (!IsTracked) { Status = "Calibration needs fresh pelvis + chest (Medium)"; return; }
+            if (!IsTracked) { CalibrationFeedback = Status = "Calibration needs fresh pelvis + chest (Medium)"; return; }
             solver.Reset();
             calibrating = true; calibrationStarted = Time.unscaledTime;
             calibrationSum = calibrationPelvisSum = 0; calibrationCount = 0;
             calibrationMin = calibrationPelvisMin = float.PositiveInfinity;
             calibrationMax = calibrationPelvisMax = float.NegativeInfinity;
-            Status = "Hold your neutral surfing stance for 1.5 s";
+            CalibrationFeedback = Status = "Hold your neutral surfing stance for 1.5 s";
         }
+        public void ClearCalibration()
+        { solver.Reset(); calibrating = false; CalibrationFeedback = ""; }
         public void ResetStatistics()
         {
             Samples = ValidSamples = 0; Disconnections = BodySelectionChanges = 0;
@@ -170,6 +178,7 @@ namespace HighwaySurfing.Kinect
         {
             hasBody = false; BodyId = 0; Bodies = 0; lastSeen = 0; lastFrame = -1;
             bodySelector.Reset(); SelectedDepthMeters = float.NaN; LockSelectedPerson = false;
+            CalibrationFeedback = "";
             bodyAvailable = IsTracked = calibrating = wasTracked = false;
             solver.Reset();
         }
@@ -187,7 +196,7 @@ namespace HighwaySurfing.Kinect
                 solver.Reset(); calibrating = false;
                 Status = "Transform changed - recalibrate neutral";
             }
-            if (Keyboard.current != null)
+            if (EnableKeyboardShortcuts && Keyboard.current != null)
             {
                 if (Keyboard.current.digit1Key.wasPressedThisFrame) ApplyPreset(0);
                 if (Keyboard.current.digit2Key.wasPressedThisFrame) ApplyPreset(1);
@@ -281,7 +290,7 @@ namespace HighwaySurfing.Kinect
             if (calibrating)
             {
                 if (!IsTracked)
-                { calibrating = false; Status = "Calibration cancelled: tracking lost"; }
+                { calibrating = false; CalibrationFeedback = Status = "Calibration cancelled: tracking lost"; }
                 else if (newFrame)
                 {
                     KinectLeanSolver.Measure(Joints[0].position, Joints[2].position, ScreenReference, out float angle, out float x);
@@ -292,8 +301,8 @@ namespace HighwaySurfing.Kinect
                     {
                         calibrating = false;
                         if (calibrationMax - calibrationMin > 4 || calibrationPelvisMax - calibrationPelvisMin > 0.08f)
-                            Status = "Moved during calibration. Hold still and retry.";
-                        else { solver.Calibrate(calibrationSum / calibrationCount, calibrationPelvisSum / calibrationCount); Status = "Neutral calibrated"; }
+                            CalibrationFeedback = Status = "Moved during calibration. Hold still and retry.";
+                        else { solver.Calibrate(calibrationSum / calibrationCount, calibrationPelvisSum / calibrationCount); CalibrationFeedback = Status = "Neutral calibrated"; }
                     }
                 }
             }

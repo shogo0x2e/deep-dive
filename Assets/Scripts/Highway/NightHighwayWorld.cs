@@ -8,6 +8,7 @@ namespace HighwaySurfing
 {
     /// <summary>A continuous, camera-relative night road. Geometry is batched into two reusable meshes.</summary>
     [ExecuteAlways]
+    [DefaultExecutionOrder(200)]
     public sealed class NightHighwayWorld : MonoBehaviour
     {
         [Header("Presentation")]
@@ -25,6 +26,8 @@ namespace HighwaySurfing
         [Tooltip("Enable to supply SteeringInput from a Kinect adapter instead of the keyboard.")]
         public bool UseExternalSteering;
         [Range(-1, 1)] public float SteeringInput;
+        [HideInInspector] public bool ExternalSteeringAvailable;
+        [HideInInspector] public bool ExternalRideReady;
         [Header("World")]
         public int Seed = 47;
         public float StartingDistance = 2200;
@@ -73,8 +76,9 @@ namespace HighwaySurfing
                 SpeedKmh = Mathf.Clamp(SpeedKmh, 20, 220);
                 float steer = UseExternalSteering ? SteeringInput : k == null ? 0 :
                     ((k.rightArrowKey.isPressed || k.dKey.isPressed) ? 1 : 0) - ((k.leftArrowKey.isPressed || k.aKey.isPressed) ? 1 : 0);
-                CurrentSteering = Mathf.Lerp(CurrentSteering, Mathf.Clamp(steer, -1, 1), 1 - Mathf.Exp(-dt * 9));
-                if (!Paused)
+                CurrentSteering = UseExternalSteering && !ExternalSteeringAvailable ? 0 :
+                    Mathf.Lerp(CurrentSteering, Mathf.Clamp(steer, -1, 1), 1 - Mathf.Exp(-dt * 9));
+                if (!Paused && (!UseExternalSteering || ExternalRideReady))
                 {
                     TravelledMetres += SpeedKmh / 3.6 * dt;
                     elapsed += dt;

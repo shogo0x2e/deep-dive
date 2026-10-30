@@ -19,7 +19,7 @@ namespace HighwaySurfing
             int speed=Mathf.RoundToInt(World.SpeedKmh),distance=(int)World.TravelledMetres;
             if(speed!=lastSpeed){SpeedLabel.SetText("{0:0}",speed);lastSpeed=speed;}
             if(distance!=lastDistance){DistanceLabel.SetText("{0:0.00} KM",distance/1000f);lastDistance=distance;}
-            StateLabel.text=World.Paused?"PAUSED":"NIGHT RIDE";
+            StateLabel.text=World.UseExternalSteering && !World.ExternalRideReady ? "REGISTER NEUTRAL" : World.Paused?"PAUSED":"NIGHT RIDE";
         }
     }
 }

@@ -1,0 +1,6 @@
+Noto Sans CJK JP Regular, official unmodified source font.
+Source: https://github.com/notofonts/noto-cjk/tree/main/Sans/OTF/Japanese
+Downloaded: 2026-10-30
+SHA-256: 68A3FC98800B2A27B371F2FB79991DAF3633BD89309D4FFAA6946FD587F375B5
+License: SIL Open Font License 1.1 (LICENSE.txt).
+The tutorial uses a static TMP atlas containing its Japanese labels and ASCII.
