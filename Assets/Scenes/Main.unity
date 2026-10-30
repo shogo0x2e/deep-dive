@@ -929,6 +929,7 @@ GameObject:
   m_Component:
   - component: {fileID: 167497252}
   - component: {fileID: 167497251}
+  - component: {fileID: 167497253}
   m_Layer: 0
   m_Name: NightHighway
   m_TagString: Untagged
@@ -981,6 +982,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &167497253
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 167497250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 03ecf49fc0ef8e141afd4101bd06cd86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HighwaySurfing.HighwayRideFeedback
+  World: {fileID: 167497251}
+  Input: {fileID: 2111728933}
+  MotorClip: {fileID: 8300000, guid: 4685cfaeb3f0c46488b29b804a80ba46, type: 3}
+  PassByClip: {fileID: 8300000, guid: 1607472741e32a64da2fdc188cf08b95, type: 3}
+  DepartureClip: {fileID: 8300000, guid: b382bb8dbe1d8bc4aa1ffea2f503f9b5, type: 3}
+  SoundEnabled: 1
+  MasterVolume: 0.7
+  MotorVolume: 0.8
+  PassByVolume: 0.7
+  StreakMaterial: {fileID: 2100000, guid: ee39eb6b7c1b75d40b4cee7bb895e98b, type: 2}
+  EffectsEnabled: 1
+  RoadLightIntensity: 1
+  SpeedLineIntensity: 1
+  SpeedLineThresholdKmh: 185
 --- !u!1 &209895610
 GameObject:
   m_ObjectHideFlags: 0

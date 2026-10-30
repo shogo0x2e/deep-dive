@@ -38,6 +38,7 @@ namespace HighwaySurfing
         public float CurrentSteering { get; private set; }
         public float RouteDistance => (float)(StartingDistance + TravelledMetres);
         public int RenderedLightCount { get; private set; }
+        public const int TrafficCount = 18;
 
         private readonly MeshBatch surfaces = new MeshBatch();
         private readonly MeshBatch lights = new MeshBatch();
@@ -151,6 +152,9 @@ namespace HighwaySurfing
             Vector3 right = new Vector3(tangent.z, 0, -tangent.x);
             return inverseHeading * (Center(s) + right * lateral + Vector3.up * height - origin);
         }
+        // Sample the same camera-relative road used by the world, after its Update.
+        public Vector3 RoadPoint(float distanceAhead, float lateral, float height = 0)
+            => transform.TransformPoint(Point(RouteDistance + distanceAhead, lateral, height));
         private float Noise(int index, int salt = 0)
         {
             unchecked
@@ -267,15 +271,24 @@ namespace HighwaySurfing
             }
         }
 
+        // Shared by rendering and pass-by audio. Integrating player travel avoids cars
+        // teleporting when speed changes (elapsed * current relative speed does not).
+        public void SampleTraffic(int index, out float distanceAhead, out float lateral, out float relativeSpeed)
+        {
+            bool opposite = index >= 9;
+            float vehicleSpeed = opposite ? -24 - Noise(index, 8) * 10 : 24 + Noise(index, 8) * 14;
+            relativeSpeed = vehicleSpeed - SpeedKmh / 3.6f;
+            distanceAhead = Mathf.Repeat(90 + index * 117 + elapsed * vehicleSpeed - (float)TravelledMetres, DrawDistance + 180) - 80;
+            lateral = opposite ? (index % 2 == 0 ? 3.1f : 7.5f) : (index % 2 == 0 ? -3.1f : -7.5f);
+        }
+
         private void BuildTraffic(float s)
         {
-            for(int i=0;i<18;i++)
+            for(int i=0;i<TrafficCount;i++)
             {
                 bool opposite=i>=9;
-                float relativeSpeed=opposite ? -SpeedKmh/3.6f-24-Noise(i,8)*10 : 24+Noise(i,8)*14-SpeedKmh/3.6f;
-                float d=Mathf.Repeat(90+i*117+elapsed*relativeSpeed,DrawDistance+180)-80;
+                SampleTraffic(i, out float d, out float lane, out _);
                 float at=s+d;
-                float lane=opposite ? (i%2==0?3.1f:7.5f) : (i%2==0?-3.1f:-7.5f);
                 Color body=new Color(.0015f,.0025f,.0045f);
                 float top=Noise(i,5)>.8f?2.2f:1.15f;
                 surfaces.Quad(Point(at,lane-.85f,.22f),Point(at,lane+.85f,.22f),Point(at,lane+.85f,top),Point(at,lane-.85f,top),body);
