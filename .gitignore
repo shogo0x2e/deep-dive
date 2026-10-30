@@ -23,3 +23,7 @@
 *.VC.db
 sysinfo.txt
 mono_crash.*
+/Assets/.Local/
+/Assets/.Local.meta
+/ProjectSettings/Packages/
+/ProjectSettings/SceneTemplateSettings.json
