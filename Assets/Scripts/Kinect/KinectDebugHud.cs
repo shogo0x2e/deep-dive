@@ -20,7 +20,7 @@ namespace HighwaySurfing.Kinect
             Color teal = new Color(.22f, .95f, .78f);
             Color amber = new Color(1f, .68f, .28f);
             TrackingLamp.color = Rig.IsTracked ? teal : amber;
-            ModeText.text = Rig.Simulation ? "SIMULATION / NOT LIVE" : Rig.CaptureActive ? "LIVE KINECT / DEPTH ONLY" : "KINECT READY / MANUAL START";
+            ModeText.text = Rig.Simulation ? "SIMULATION / NOT LIVE" : Rig.CaptureActive ? "LIVE KINECT / NEAREST BODY" : "KINECT READY / MANUAL START";
             ModeText.color = Rig.Simulation ? amber : teal;
             StateText.text = Rig.Status;
             CalibrationText.text = Rig.Calibrating ? $"HOLD NEUTRAL    {Rig.CalibrationProgress:P0}" :
@@ -36,7 +36,7 @@ namespace HighwaySurfing.Kinect
                 $"<color=#91A6BA>VALID SAMPLES</color>  {Rig.ValidSamples} / {Rig.Samples}\n" +
                 $"<color=#91A6BA>TRACKING LOSSES</color>  {Rig.Disconnections}\n" +
                 $"<color=#91A6BA>DROPPED INPUT</color>  {Rig.Dropped}\n" +
-                $"<color=#91A6BA>PELVIS SHIFT</color>  {Rig.PelvisOffset * 100:+0.0;-0.0;0.0} cm";
+                $"<color=#91A6BA>{(Rig.LockSelectedPerson ? "LOCKED" : "NEAREST")}</color>  {(float.IsFinite(Rig.SelectedDepthMeters) ? Rig.SelectedDepthMeters.ToString("0.00") + " m" : "--")}  <color=#91A6BA>SELECTS</color>  {Rig.BodySelectionChanges}";
             var p = Rig.SensorOrigin.position; var e = Rig.SensorOrigin.eulerAngles;
             PlacementText.text = $"{Rig.SensorPlacement}  {(Rig.OppositeSide ? "/ opposite side" : "")}\n" +
                 $"POSITION  {p.x:0.00}, {p.y:0.00}, {p.z:0.00} m\nROTATION  {e.x:0}, {e.y:0}, {e.z:0} deg";

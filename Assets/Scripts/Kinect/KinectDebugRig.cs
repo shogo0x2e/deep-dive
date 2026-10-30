@@ -21,6 +21,11 @@ namespace HighwaySurfing.Kinect
         public Backend ProcessingBackend = Backend.DirectML;
         public bool Use30Fps;
         [Range(0.1f, 1f)] public float MaximumFrameAge = 0.3f;
+        [Header("Nearest person selection (sensor depth)")]
+        [Min(0)] public float BodySwitchMargin = .25f;
+        [Min(0)] public float BodySwitchDelay = .5f;
+        [Min(0)] public float BodyLostGrace = .75f;
+        public bool LockSelectedPerson;
         [Header("Steering")]
         [Range(0, 12)] public float DeadZoneDegrees = 3;
         [Range(5, 35)] public float FullScaleDegrees = 18;
@@ -47,6 +52,8 @@ namespace HighwaySurfing.Kinect
         public float PelvisOffset => solver.PelvisOffset;
         public uint BodyId { get; private set; }
         public int Bodies { get; private set; }
+        public float SelectedDepthMeters { get; private set; } = float.NaN;
+        public int BodySelectionChanges { get; private set; }
         public int PelvisConfidence { get; private set; }
         public int ChestConfidence { get; private set; }
         public float ResultAgeMs { get; private set; }
@@ -64,6 +71,8 @@ namespace HighwaySurfing.Kinect
         public static readonly int[] Parents = { -1,0,1,2,2,4,5,6,7,8,7,2,11,12,13,14,15,14,0,18,19,20,0,22,23,24,3,26,26,28,26,30 };
         readonly KinectLeanSolver solver = new KinectLeanSolver();
         readonly int[] confidence = new int[32];
+        readonly KinectBodySelector bodySelector = new KinectBodySelector();
+        readonly KinectBodySelector.Candidate[] candidates = new KinectBodySelector.Candidate[6];
         KinectBodyCapture capture;
         bool hasBody, bodyAvailable, lastSimulation, calibrating, wasTracked;
         long lastFrame = -1;
@@ -154,12 +163,13 @@ namespace HighwaySurfing.Kinect
         }
         public void ResetStatistics()
         {
-            Samples = ValidSamples = 0; Disconnections = 0;
+            Samples = ValidSamples = 0; Disconnections = BodySelectionChanges = 0;
             InputFps = 0; fpsFrames = 0; fpsStarted = Time.unscaledTime;
         }
         void ResetTracking()
         {
             hasBody = false; BodyId = 0; Bodies = 0; lastSeen = 0; lastFrame = -1;
+            bodySelector.Reset(); SelectedDepthMeters = float.NaN; LockSelectedPerson = false;
             bodyAvailable = IsTracked = calibrating = wasTracked = false;
             solver.Reset();
         }
@@ -215,13 +225,22 @@ namespace HighwaySurfing.Kinect
                 if (snapshot != null && snapshot.FrameNumber != lastFrame)
                 {
                     newFrame = true; lastFrame = snapshot.FrameNumber; Bodies = snapshot.Bodies.Length;
-                    if (hasBody && Time.unscaledTime - lastSeen > 2f)
-                    { hasBody = false; solver.Reset(); calibrating = false; }
-                    if (!hasBody && Bodies == 1)
-                    { hasBody = true; BodyId = snapshot.Bodies[0].Id; solver.Reset(); }
-                    KinectBodyCapture.Body chosen = null;
-                    foreach (var candidate in snapshot.Bodies) if (hasBody && candidate.Id == BodyId) { chosen = candidate; break; }
+                    if (hasBody && !LockSelectedPerson && Time.unscaledTime - lastSeen > 2f)
+                    { bodySelector.Reset(); hasBody = false; solver.Reset(); calibrating = false; }
+                    for (int b = 0; b < Bodies; b++)
+                    {
+                        var pelvis = snapshot.Bodies[b].Joints[0];
+                        candidates[b] = new KinectBodySelector.Candidate(snapshot.Bodies[b].Id, pelvis.Z * .001f, pelvis.Confidence);
+                    }
+                    int selected = bodySelector.Step(candidates, Bodies, Time.unscaledTime,
+                        BodySwitchMargin, BodySwitchDelay, BodyLostGrace, LockSelectedPerson);
+                    if (bodySelector.SelectionChanged)
+                    { solver.Reset(); calibrating = false; if (bodySelector.HasSelection) BodySelectionChanges++; }
+                    hasBody = bodySelector.HasSelection;
+                    BodyId = bodySelector.SelectedId;
+                    KinectBodyCapture.Body chosen = selected >= 0 ? snapshot.Bodies[selected] : null;
                     bodyAvailable = chosen != null;
+                    SelectedDepthMeters = bodyAvailable ? candidates[selected].DepthMeters : float.NaN;
                     if (bodyAvailable)
                     {
                         lastSeen = Time.unscaledTime;
@@ -236,8 +255,11 @@ namespace HighwaySurfing.Kinect
                     }
                 }
                 if (capture != null && !calibrating)
-                    Status = capture.Status + (Bodies > 1 && !hasBody ? " - leave one participant in view" : "");
+                    Status = LockSelectedPerson && hasBody && (!bodyAvailable || age > MaximumFrameAge)
+                        ? "Locked body lost - input is zero"
+                        : capture.Status + (Bodies > 0 && !hasBody ? " - waiting for reliable nearest pelvis" : "");
             }
+            if (!Simulation && age > MaximumFrameAge) SelectedDepthMeters = float.NaN;
             ResultAgeMs = age * 1000;
             PelvisConfidence = bodyAvailable ? confidence[0] : 0;
             ChestConfidence = bodyAvailable ? confidence[2] : 0;
