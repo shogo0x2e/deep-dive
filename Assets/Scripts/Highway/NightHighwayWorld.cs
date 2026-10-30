@@ -19,7 +19,7 @@ namespace HighwaySurfing
         [Range(0.8f, 2.4f)] public float EyeHeight = 1.25f;
         [Range(0, 8)] public float CameraBankDegrees = 2.5f;
         [Header("Ride")]
-        [Range(20, 220)] public float SpeedKmh = 138;
+        [Range(0, 220)] public float SpeedKmh = 138;
         [Range(0, 8)] public float LateralSpeed = 3.5f;
         [Range(-9.5f, -1.5f)] public float LateralPosition = -6.7f;
         public bool Paused;
@@ -73,7 +73,7 @@ namespace HighwaySurfing
                     if (k.upArrowKey.isPressed || k.wKey.isPressed) SpeedKmh += dt * 25;
                     if (k.downArrowKey.isPressed || k.sKey.isPressed) SpeedKmh -= dt * 25;
                 }
-                SpeedKmh = Mathf.Clamp(SpeedKmh, 20, 220);
+                SpeedKmh = Mathf.Clamp(SpeedKmh, 0, 220);
                 float steer = UseExternalSteering ? SteeringInput : k == null ? 0 :
                     ((k.rightArrowKey.isPressed || k.dKey.isPressed) ? 1 : 0) - ((k.leftArrowKey.isPressed || k.aKey.isPressed) ? 1 : 0);
                 CurrentSteering = UseExternalSteering && !ExternalSteeringAvailable ? 0 :

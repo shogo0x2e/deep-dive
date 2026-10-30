@@ -34,6 +34,7 @@ namespace HighwaySurfing.Kinect
         [Header("Explicit simulation (never an automatic fallback)")]
         public bool Simulation;
         [Range(-30, 30)] public float SimulationLeanDegrees;
+        [Range(-60, 60)] public float SimulationFrontArmPitchDegrees;
         public bool SimulationSweep;
         [Header("Serialized skeleton")]
         public Transform[] Joints;
@@ -69,6 +70,13 @@ namespace HighwaySurfing.Kinect
         public long Dropped => capture?.Dropped ?? 0;
         public int Disconnections { get; private set; }
         public bool CaptureActive => capture != null && capture.IsAlive;
+        public bool TryGetJointPosition(int index, out Vector3 position)
+        {
+            position = Vector3.zero;
+            if (!IsTracked || index < 0 || index >= 32 || confidence[index] < 1 || Joints[index] == null) return false;
+            position = Joints[index].position;
+            return float.IsFinite(position.x) && float.IsFinite(position.y) && float.IsFinite(position.z);
+        }
         public static readonly string[] JointNames = {
             "Pelvis","SpineNavel","SpineChest","Neck","ClavicleLeft","ShoulderLeft","ElbowLeft","WristLeft","HandLeft","HandTipLeft","ThumbLeft",
             "ClavicleRight","ShoulderRight","ElbowRight","WristRight","HandRight","HandTipRight","ThumbRight",
@@ -133,7 +141,7 @@ namespace HighwaySurfing.Kinect
             if (capture != null && capture.IsAlive && !capture.Stop())
             { Status = "Wait for Kinect to stop before simulation"; return; }
             Simulation = true; lastSimulation = true;
-            SimulationLeanDegrees = 0; SimulationSweep = false;
+            SimulationLeanDegrees = SimulationFrontArmPitchDegrees = 0; SimulationSweep = false;
             simulationSensorInverse = SensorOrigin.worldToLocalMatrix;
             ResetStatistics(); ResetTracking();
             Status = "SIMULATION - synthetic bones, no Kinect";
@@ -219,6 +227,8 @@ namespace HighwaySurfing.Kinect
                 for (int i = 0; i < 32; i++)
                 {
                     Vector3 world = NeutralJoint(i);
+                    if (i >= 13 && i <= 17)
+                        world = NeutralJoint(12) + Quaternion.AngleAxis(-SimulationFrontArmPitchDegrees, Vector3.right) * (world - NeutralJoint(12));
                     if (i < 18 || i >= 26)
                         world = new Vector3(0, 0.95f, 0) + Quaternion.AngleAxis(-angle, Vector3.forward) * (world - new Vector3(0, 0.95f, 0));
                     Joints[i].localPosition = simulationSensorInverse.MultiplyPoint3x4(world);

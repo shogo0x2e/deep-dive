@@ -9,6 +9,7 @@ namespace HighwaySurfing
         public CanvasGroup Group;
         public TextMeshProUGUI StatusLabel, TrackingLabel, SettingsLabel, PlacementLabel;
         public RectTransform SteeringMarker;
+        public KinectArmSpeedInput ArmSpeed;
         void LateUpdate()
         {
             if (Input == null || Input.Rig == null) return;
@@ -20,6 +21,11 @@ namespace HighwaySurfing
             string distance = float.IsFinite(rig.SelectedDepthMeters) ? rig.SelectedDepthMeters.ToString("0.00") + " m" : "--";
             TrackingLabel.text = $"{(rig.LockSelectedPerson ? "LOCKED" : "NEAREST")}  ID {(rig.IsTracked || rig.LockSelectedPerson ? rig.BodyId.ToString() : "--")}   {distance}   PEOPLE {rig.Bodies}\n" +
                 $"LEAN {rig.RawDegrees:+0.0;-0.0;0.0} deg   INPUT {Input.World.SteeringInput:+0.00;-0.00;0.00}   {rig.InputFps:0} fps";
+            if (ArmSpeed != null)
+            {
+                string speedState = !ArmSpeed.EnableArmSpeed ? "ARM OFF" : !ArmSpeed.Calibrated ? "ARM WAIT" : !ArmSpeed.ArmAvailable ? "ARM LOST" : ArmSpeed.Status;
+                TrackingLabel.text += $"\n{Input.World.SpeedKmh:0} km/h  {speedState}  ARM {ArmSpeed.RelativeDegrees:+0;-0;0} deg  {(ArmSpeed.FrontWrist == 7 ? "L" : ArmSpeed.FrontWrist == 14 ? "R" : "-")}";
+            }
             SettingsLabel.text = $"Sensitivity x{Input.Sensitivity:0.0}    Direction {(Input.InvertSteering ? "INVERTED" : "NORMAL")}";
             PlacementLabel.text = rig.SensorPlacement == Kinect.KinectDebugRig.Placement.Screen ? "SENSOR: SCREEN 0 DEG / PARTICIPANT: 45 DEG" : rig.SensorPlacement == Kinect.KinectDebugRig.Placement.Diagonal45 ?
                 $"SENSOR: {(rig.OppositeSide ? "LEFT" : "RIGHT")} 45 DEG - facing the player" : "SENSOR: CUSTOM - match the physical setup";

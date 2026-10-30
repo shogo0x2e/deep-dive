@@ -40,7 +40,7 @@ namespace HighwaySurfing.EditorTools
             var fill=Box(track.transform,"Progress",Vector2.zero,new Vector2(500,12),new Color(.12f,.66f,.59f)).GetComponent<UnityEngine.UI.Image>();
             fill.sprite=AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");fill.type=UnityEngine.UI.Image.Type.Filled;fill.fillMethod=UnityEngine.UI.Image.FillMethod.Horizontal;fill.fillOrigin=0;fill.fillAmount=0;view.ProgressFill=fill;
             view.ProgressText=Label(card.transform,"ProgressText","ポーズを合わせると、自動で始まります",font,18,new Vector2(-40,-160),new Vector2(525,70),new Color(.25f,.48f,.46f));
-            Label(card.transform,"SteeringHint","左にかたむくと左へ    右にかたむくと右へ",font,21,new Vector2(-500,-255),new Vector2(1010,40),new Color(.31f,.43f,.45f));
+            Label(card.transform,"SteeringHint",SurfTutorialView.ControlsHint,font,21,new Vector2(-500,-235),new Vector2(1010,75),new Color(.31f,.43f,.45f));
             input.EnableAutomaticCalibration=true;input.World.ShowHud=false;
             var hint=GameObject.Find("KinectOperatorPanel/Panel/Hint")?.GetComponent<TextMeshProUGUI>();
             if(hint!=null)hint.text="Open arms at shoulder height; hold the surfing pose.\nTutorial appears on OBS; this operator panel does not.";
@@ -58,14 +58,19 @@ namespace HighwaySurfing.EditorTools
             if(graphic.GetComponent<CanvasRenderer>()==null)graphic.gameObject.AddComponent<CanvasRenderer>();
             graphic.SetAllDirty();
             var font=CreateFont();
-            var additions=new string(SurfTutorialView.FontCharacters.Distinct().Where(c=>!font.HasCharacter(c)).ToArray());
+            var additions=new string(SurfTutorialView.FontCharacters.Distinct().Where(c=>!char.IsControl(c)&&!font.HasCharacter(c)).ToArray());
             if(additions.Length>0)
             {
                 font.atlasPopulationMode=AtlasPopulationMode.Dynamic;
+                var serializedFont=new SerializedObject(font);
+                serializedFont.FindProperty("m_SourceFontFile").objectReferenceValue=AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/NotoSansJP/NotoSansCJKjp-Regular.otf");
+                serializedFont.ApplyModifiedPropertiesWithoutUndo();
                 if(!font.TryAddCharacters(additions,out string missing))throw new InvalidOperationException("Missing tutorial glyphs: "+missing);
             }
             font.atlasPopulationMode=AtlasPopulationMode.Static;EditorUtility.SetDirty(font);
             view.Title.text=view.Input.TutorialTitle;view.Instruction.text=view.Input.TutorialMessage;
+            var hint=view.transform.Find("WelcomeCard/SteeringHint").GetComponent<TextMeshProUGUI>();
+            hint.text=SurfTutorialView.ControlsHint;hint.rectTransform.anchoredPosition=new Vector2(-500,-235);hint.rectTransform.sizeDelta=new Vector2(1010,75);
             ConfigureOverlay(view);
             var scene=view.gameObject.scene;EditorSceneManager.MarkSceneDirty(scene);EditorSceneManager.SaveScene(scene);AssetDatabase.SaveAssets();
         }
@@ -91,7 +96,7 @@ namespace HighwaySurfing.EditorTools
             if(source==null)throw new InvalidOperationException("Japanese source font missing.");
             var font=TMP_FontAsset.CreateFontAsset(source,48,5,GlyphRenderMode.SDFAA,1024,1024,AtlasPopulationMode.Dynamic,true);
             font.name="TutorialJapanese";
-            var characters=new string((SurfTutorialView.FontCharacters+new string(Enumerable.Range(32,95).Select(x=>(char)x).ToArray())).Distinct().ToArray());
+            var characters=new string((SurfTutorialView.FontCharacters+new string(Enumerable.Range(32,95).Select(x=>(char)x).ToArray())).Where(c=>!char.IsControl(c)).Distinct().ToArray());
             if(!font.TryAddCharacters(characters,out string missing))throw new InvalidOperationException("Missing tutorial glyphs: "+missing);
             font.atlasPopulationMode=AtlasPopulationMode.Static;
             AssetDatabase.CreateAsset(font,path);
