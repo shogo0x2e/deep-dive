@@ -63,8 +63,7 @@ namespace HighwaySurfing
             Control = target == 0 ? 0 : Mathf.Lerp(Control, target, 1 - Mathf.Exp(-Time.deltaTime / Mathf.Max(.001f, SmoothingSeconds)));
             if (!Input.World.Paused)
             {
-                float rate = Control > 0 ? AccelerationKmhPerSecond : BrakingKmhPerSecond;
-                Input.World.SpeedKmh = Mathf.Clamp(Input.World.SpeedKmh + Control * rate * Mathf.Min(Time.deltaTime, .05f), 0, 220);
+                Input.World.ApplySpeedControl(Control, AccelerationKmhPerSecond, BrakingKmhPerSecond, Time.deltaTime);
             }
             Status = target > 0 ? "ACCEL" : target < 0 ? "BRAKE" : "CRUISE";
         }

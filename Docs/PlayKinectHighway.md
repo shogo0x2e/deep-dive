@@ -40,6 +40,14 @@
 
 `KinectSurfing` の **Kinect Arm Speed Input** で `Threshold Degrees`、`Full Scale Degrees`、加減速度を調整できます。`Enable Arm Speed`をOFFにすると従来の一定速度操作になります。Hの運営パネルで速度、ACCEL/BRAKE/CRUISE、腕の角度、選択した手（L/R）を確認できます。
 
+## 道路拡張・衝突減速版（2026-10-30）
+
+`codex/highway-playtest` ブランチに、連続した分岐ランプと左側合流、立体車体、衝突演出、低音、衝突時の減速を追加しています。取り込み手順とMac試遊は [HighwayKeyboard.md](HighwayKeyboard.md) を参照してください。
+
+Mainの `NightHighway` → **Night Highway World > Collision Gameplay** で `Collision Slowdown Enabled` をON/OFFできます。初期値はON、`Collision Speed Loss Percent` は30（138 → 96.6 km/h）。OFFにしても衝突の画面効果と音は残ります。減速後は腕のアクセル操作で再加速でき、Rや参加者の再登録では開始速度へ戻ります。Play中に切り替えられますが、設定を保持するときは停止後に変更してシーンを保存します。
+
+今回の追加分はMac・Kinectなしで検証しています。Windowsの実機KinectとSpoutは会場で確認してください。
+
 ## 運営者向けの調整
 
 Hで操作パネルを表示できます。通常は非表示で、OBSへは送られません。

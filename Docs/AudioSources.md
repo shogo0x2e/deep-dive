@@ -36,6 +36,14 @@ W3 is one recorded car pass. The 2.9-second car clip has leading silence and lon
 
 The original is panned left-to-right. Mono derivatives allow runtime placement on the actual passing side. The original recorded Doppler movement is retained; runtime uses a fixed, modest playback rate per pass instead of adding another pitch fall. Up to eight voices can overlap, with no continuous wind loop.
 
+## Low drive layer
+
+`HighwayDriveBass` adds an original synthesized layer underneath the recordings. The existing recorded clips are unchanged. Its foundation is a 66 Hz rotor with harmonics, a quiet subharmonic, and a band-limited low rumble. All frequencies and modulation rates meet at a four-second loop boundary; the clip has no DC offset and a peak below 0.78. It is generated once per component lifetime as 22.05 kHz mono PCM, rather than synthesized per frame or on the audio thread.
+
+Speed changes playback pitch from 0.82 to 1.28 (a roughly 54–84 Hz foundation, with upper harmonics audible on smaller speakers). Acceleration increases its weight, braking halves the drive envelope, and neutral holds the current speed/pitch. It fades at zero speed, pause and onboarding, and follows SoundEnabled / MasterVolume. `BassEnabled` provides an A/B switch; `BassVolume` defaults to 0.8 in both Main and HighwayKeyboard. The mix is intended as a low propulsion sound rather than a literal jet-engine recording.
+
+Mac validation: loop continuity, zero DC, peak bounds and all 221 integer speeds passed. Ten Play checks covered A/B, speed/pitch, acceleration/braking, zero speed, pause and mute; measured full-output peak was 0.425 with no clipping in that trial. A steady 138 km/h motor-only comparison is saved locally as `.Local/Review/drive-bass-comparison.wav` (four seconds original, half-second silence, four seconds with bass). The new mix has substantially more 20–300 Hz energy; playback-device bass response still determines the audible weight.
+
 ## Limits to assess by ear
 
 This is a processed, short field recording, not an isolated multi-RPM studio session. Listen for a periodic texture, thin/harsh high frequencies, residual road noise, and the relative level of pass-bys. Frequency and level checks establish signal behavior; speaker quality and the user's preferred timbre need in-person evaluation.

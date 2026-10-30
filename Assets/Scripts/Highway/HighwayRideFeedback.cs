@@ -21,6 +21,9 @@ namespace HighwaySurfing
         [Range(0, 1)] public float MasterVolume = .7f;
         [Range(0, 1)] public float MotorVolume = .8f;
         [Range(0, 1)] public float PassByVolume = .7f;
+        [Header("Low drive")]
+        public bool BassEnabled = true;
+        [Range(0, 1)] public float BassVolume = .8f;
         [Header("Light")]
         public Material StreakMaterial;
         public bool EffectsEnabled = true;
@@ -34,6 +37,7 @@ namespace HighwaySurfing
         public int DepartureCount { get; private set; }
         public AudioSource MotorSource { get; private set; }
         public AudioSource DepartureSource { get; private set; }
+        public AudioSource BassSource { get; private set; }
         public int StreetPassCount { get; private set; }
         public int VehiclePassCount { get; private set; }
         public int ActivePassVoices { get; private set; }
@@ -50,9 +54,13 @@ namespace HighwaySurfing
         readonly AudioSource[] motors = new AudioSource[3];
         readonly AudioLowPassFilter[] motorFilters = new AudioLowPassFilter[3];
         float motorSpeed, motorGain;
+        AudioClip bassClip;
+        float bassGain;
         readonly AudioSource[] passes = new AudioSource[8];
         readonly float[] passAge = new float[8], passPitch = new float[8], passGain = new float[8], passPan = new float[8];
         readonly float[] previousTraffic = new float[NightHighwayWorld.TrafficCount], lastVehicleSound = new float[NightHighwayWorld.TrafficCount];
+        readonly bool[] trafficObserved = new bool[NightHighwayWorld.TrafficCount];
+        int rideRevision;
         float previousRoute;
         int previousLamp, lastLampSound;
         bool observing;
@@ -65,6 +73,7 @@ namespace HighwaySurfing
             armSpeed = Input != null ? Input.GetComponent<KinectArmSpeedInput>() : null;
             UsingMotorLoops = MotorLoops != null && MotorLoops.IsReady;
             motorSpeed = World.SpeedKmh; motorGain = 0;
+            rideRevision = World.RideRevision;
             if (UsingMotorLoops)
             {
                 for (int n = 0; n < motors.Length; n++)
@@ -76,6 +85,10 @@ namespace HighwaySurfing
                 MotorSource = motors[1];
             }
             else MotorSource = MakeSource("Board motor", MotorClip, true);
+            if (bassClip == null) bassClip = HighwayDriveBass.CreateClip();
+            BassSource = MakeSource("Low drive", bassClip, true);
+            BassSource.pitch = HighwayDriveBass.Pitch(World.SpeedKmh);
+            bassGain = 0;
             DepartureSource = MakeSource("Departure", DepartureClip, false);
             for (int n = 0; n < passes.Length; n++) passes[n] = MakeSource("Pass by " + n, PassByClip, false);
             for (int n = 0; n < lastVehicleSound.Length; n++) lastVehicleSound[n] = -10;
@@ -122,6 +135,12 @@ namespace HighwaySurfing
         {
             if (generated == null || World == null || World.MainCamera == null) return;
             float dt = Mathf.Min(Time.unscaledDeltaTime, .1f);
+            if (rideRevision != World.RideRevision)
+            {
+                observing = false; rideRevision = World.RideRevision;
+                for (int n = 0; n < passes.Length; n++) passes[n].Stop();
+                for (int n = 0; n < trafficObserved.Length; n++) { trafficObserved[n] = false; lastVehicleSound[n] = -10; }
+            }
             bool registered = Input != null && Input.KinectMode ? Input.RideRegistered : !World.UseExternalSteering;
             bool active = !World.Paused && Time.timeScale > 0 && (!World.UseExternalSteering || World.ExternalRideReady);
             if (registered && !wasRegistered)
@@ -136,8 +155,13 @@ namespace HighwaySurfing
             float speed = Mathf.Clamp01(World.SpeedKmh / 220);
             float motion = Mathf.SmoothStep(0, 1, Mathf.Clamp01(World.SpeedKmh / 35));
             float volume = SoundEnabled ? MasterVolume * RideFade * motion : 0;
-            float control = armSpeed != null && armSpeed.ArmAvailable ? armSpeed.Control : 0;
+            float control = armSpeed != null && armSpeed.ArmAvailable ? armSpeed.Control : World.KeyboardSpeedControl;
             UpdateMotor(volume, speed, control, dt);
+            float bassTarget = SoundEnabled && BassEnabled ?
+                MasterVolume * BassVolume * RideFade * HighwayDriveBass.Gain(World.SpeedKmh, control) : 0;
+            bassGain = Smooth(bassGain, bassTarget, dt, .18f);
+            BassSource.volume = bassGain;
+            BassSource.pitch = Smooth(BassSource.pitch, HighwayDriveBass.Pitch(World.SpeedKmh), dt, .3f);
             UpdatePasses(active, dt);
             // Registration is an event, so pause / brief tracking loss cannot retrigger the chime.
             if (!active || !SoundEnabled)
@@ -208,13 +232,14 @@ namespace HighwaySurfing
             }
             for (int n = 0; n < NightHighwayWorld.TrafficCount; n++)
             {
-                World.SampleTraffic(n, out float distance, out float lane, out float relativeSpeed);
+                bool visible = World.TrySampleTraffic(n, out float distance, out float lane, out float relativeSpeed);
+                if (!visible) { trafficObserved[n] = false; continue; }
                 float magnitude = Mathf.Abs(relativeSpeed);
                 float pitch = RecordedPassBy ? Mathf.Lerp(.9f, 1.25f, Mathf.Clamp01(magnitude / 80)) :
                     Mathf.Lerp(.75f, 1.5f, Mathf.Clamp01(magnitude / 80));
                 float lead = magnitude * PassByPeakSeconds / pitch;
                 bool crossing = relativeSpeed < 0 ? previousTraffic[n] > lead && distance <= lead : previousTraffic[n] < -lead && distance >= -lead;
-                if (continuous && SoundEnabled && magnitude > 2 && crossing && Mathf.Abs(distance - previousTraffic[n]) < 10 &&
+                if (continuous && trafficObserved[n] && SoundEnabled && magnitude > 2 && crossing && Mathf.Abs(distance - previousTraffic[n]) < 10 &&
                     Time.unscaledTime - lastVehicleSound[n] > 1)
                 {
                     float dx = lane - World.LateralPosition;
@@ -224,6 +249,7 @@ namespace HighwaySurfing
                     lastVehicleSound[n] = Time.unscaledTime;
                 }
                 previousTraffic[n] = distance;
+                trafficObserved[n] = true;
             }
             if (!continuous) lastLampSound = lamp;
             previousLamp = lamp; previousRoute = route; observing = active;
@@ -317,7 +343,10 @@ namespace HighwaySurfing
             RideFade = SpeedLineAmount = DepartureGlow = 0;
             wasRegistered = false; departureAge = 10;
             observing = false;
+            BassSource = null; bassGain = 0;
         }
+
+        void OnDestroy() { if (bassClip != null) Destroy(bassClip); }
 
         sealed class Batch
         {

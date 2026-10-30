@@ -930,6 +930,7 @@ GameObject:
   - component: {fileID: 167497252}
   - component: {fileID: 167497251}
   - component: {fileID: 167497253}
+  - component: {fileID: 167497254}
   m_Layer: 0
   m_Name: NightHighway
   m_TagString: Untagged
@@ -957,12 +958,16 @@ MonoBehaviour:
   CameraBankDegrees: 2.5
   SpeedKmh: 138
   LateralSpeed: 3.5
-  LateralPosition: -6.7
+  KeyboardAccelerationKmhPerSecond: 30
+  KeyboardBrakingKmhPerSecond: 60
+  LateralPosition: -3.1
   Paused: 0
   UseExternalSteering: 1
   SteeringInput: 0
   ExternalSteeringAvailable: 0
   ExternalRideReady: 0
+  CollisionSlowdownEnabled: 1
+  CollisionSpeedLossPercent: 30
   Seed: 47
   StartingDistance: 2200
   DrawDistance: 1100
@@ -1008,11 +1013,30 @@ MonoBehaviour:
   MasterVolume: 0.7
   MotorVolume: 0.8
   PassByVolume: 0.7
+  BassEnabled: 1
+  BassVolume: 0.8
   StreakMaterial: {fileID: 2100000, guid: ee39eb6b7c1b75d40b4cee7bb895e98b, type: 2}
   EffectsEnabled: 1
   RoadLightIntensity: 1
   SpeedLineIntensity: 1
   SpeedLineThresholdKmh: 185
+--- !u!114 &167497254
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 167497250}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0d982c905e94881b83a7f3275c668d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HighwaySurfing.HighwayImpactFeedback
+  World: {fileID: 167497251}
+  RideFeedback: {fileID: 167497253}
+  ImpactMaterial: {fileID: 0}
+  ImpactStrength: 1
+  ImpactVolume: 0.55
 --- !u!1 &209895610
 GameObject:
   m_ObjectHideFlags: 0
