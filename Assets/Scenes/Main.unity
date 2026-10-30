@@ -997,8 +997,13 @@ MonoBehaviour:
   World: {fileID: 167497251}
   Input: {fileID: 2111728933}
   MotorClip: {fileID: 8300000, guid: 4685cfaeb3f0c46488b29b804a80ba46, type: 3}
-  PassByClip: {fileID: 8300000, guid: 1607472741e32a64da2fdc188cf08b95, type: 3}
+  PassByClip: {fileID: 8300000, guid: 1ccc59799555754488254c2c761f02c5, type: 3}
   DepartureClip: {fileID: 8300000, guid: b382bb8dbe1d8bc4aa1ffea2f503f9b5, type: 3}
+  MotorLoops: {fileID: 11400000, guid: d8da828224a0b7147a86589f40690563, type: 2}
+  StreetPassClip: {fileID: 8300000, guid: 95a0bf53e25719e4a91722e9500cdea3, type: 3}
+  PassByPeakSeconds: 0.95
+  StreetPassPeakSeconds: 0.2625
+  RecordedPassBy: 1
   SoundEnabled: 1
   MasterVolume: 0.7
   MotorVolume: 0.8

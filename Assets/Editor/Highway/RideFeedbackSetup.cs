@@ -54,6 +54,10 @@ namespace HighwaySurfing.EditorTools
             feedback.PassByClip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioFolder + "/PassBy.wav");
             feedback.MotorClip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioFolder + "/Motor.wav");
             feedback.DepartureClip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioFolder + "/Departure.wav");
+            // This menu deliberately restores the original synthesized audition.
+            feedback.MotorLoops = null; feedback.StreetPassClip = null;
+            feedback.RecordedPassBy = false;
+            feedback.PassByPeakSeconds = .16f; feedback.StreetPassPeakSeconds = .15f;
             EditorUtility.SetDirty(feedback);
             AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene);

@@ -12,6 +12,11 @@ namespace HighwaySurfing
         public KinectHighwayInput Input;
         [Header("Sound")]
         public AudioClip MotorClip, PassByClip, DepartureClip;
+        public HighwayMotorLoops MotorLoops;
+        public AudioClip StreetPassClip;
+        [Min(0)] public float PassByPeakSeconds = .16f;
+        [Min(0)] public float StreetPassPeakSeconds = .15f;
+        public bool RecordedPassBy;
         public bool SoundEnabled = true;
         [Range(0, 1)] public float MasterVolume = .7f;
         [Range(0, 1)] public float MotorVolume = .8f;
@@ -32,6 +37,9 @@ namespace HighwaySurfing
         public int StreetPassCount { get; private set; }
         public int VehiclePassCount { get; private set; }
         public int ActivePassVoices { get; private set; }
+        public bool UsingMotorLoops { get; private set; }
+        public Vector3 MotorBandWeights { get; private set; }
+        public IReadOnlyList<AudioSource> MotorBandSources => motors;
 
         GameObject generated;
         Mesh roadMesh, screenMesh;
@@ -39,8 +47,11 @@ namespace HighwaySurfing
         float departureAge = 10, visualClock;
         bool wasRegistered;
         KinectArmSpeedInput armSpeed;
-        readonly AudioSource[] passes = new AudioSource[4];
-        readonly float[] passAge = new float[4], passPitch = new float[4], passGain = new float[4], passPan = new float[4];
+        readonly AudioSource[] motors = new AudioSource[3];
+        readonly AudioLowPassFilter[] motorFilters = new AudioLowPassFilter[3];
+        float motorSpeed, motorGain;
+        readonly AudioSource[] passes = new AudioSource[8];
+        readonly float[] passAge = new float[8], passPitch = new float[8], passGain = new float[8], passPan = new float[8];
         readonly float[] previousTraffic = new float[NightHighwayWorld.TrafficCount], lastVehicleSound = new float[NightHighwayWorld.TrafficCount];
         float previousRoute;
         int previousLamp, lastLampSound;
@@ -52,7 +63,19 @@ namespace HighwaySurfing
             generated = new GameObject("GeneratedRideFeedback") { hideFlags = HideFlags.DontSave };
             generated.transform.SetParent(transform, false);
             armSpeed = Input != null ? Input.GetComponent<KinectArmSpeedInput>() : null;
-            MotorSource = MakeSource("Board motor", MotorClip, true);
+            UsingMotorLoops = MotorLoops != null && MotorLoops.IsReady;
+            motorSpeed = World.SpeedKmh; motorGain = 0;
+            if (UsingMotorLoops)
+            {
+                for (int n = 0; n < motors.Length; n++)
+                {
+                    motors[n] = MakeSource("Board motor " + n, MotorLoops.Clip(n), true);
+                    motorFilters[n] = motors[n].gameObject.AddComponent<AudioLowPassFilter>();
+                    motorFilters[n].cutoffFrequency = 7000;
+                }
+                MotorSource = motors[1];
+            }
+            else MotorSource = MakeSource("Board motor", MotorClip, true);
             DepartureSource = MakeSource("Departure", DepartureClip, false);
             for (int n = 0; n < passes.Length; n++) passes[n] = MakeSource("Pass by " + n, PassByClip, false);
             for (int n = 0; n < lastVehicleSound.Length; n++) lastVehicleSound[n] = -10;
@@ -113,9 +136,8 @@ namespace HighwaySurfing
             float speed = Mathf.Clamp01(World.SpeedKmh / 220);
             float motion = Mathf.SmoothStep(0, 1, Mathf.Clamp01(World.SpeedKmh / 35));
             float volume = SoundEnabled ? MasterVolume * RideFade * motion : 0;
-            float load = armSpeed != null && armSpeed.ArmAvailable ? Mathf.Max(0, armSpeed.Control) : 0;
-            MotorSource.volume = Smooth(MotorSource.volume, volume * MotorVolume * (Mathf.Lerp(.38f, .8f, speed) + load * .12f), dt, .2f);
-            MotorSource.pitch = Smooth(MotorSource.pitch, Mathf.Lerp(.55f, 1.65f, speed) + load * .06f, dt, .3f);
+            float control = armSpeed != null && armSpeed.ArmAvailable ? armSpeed.Control : 0;
+            UpdateMotor(volume, speed, control, dt);
             UpdatePasses(active, dt);
             // Registration is an event, so pause / brief tracking loss cannot retrigger the chime.
             if (!active || !SoundEnabled)
@@ -132,6 +154,29 @@ namespace HighwaySurfing
         static float Smooth(float value, float target, float dt, float seconds)
             => Mathf.Lerp(value, target, 1 - Mathf.Exp(-dt / seconds));
 
+        void UpdateMotor(float volume, float speed, float control, float dt)
+        {
+            float load = Mathf.Max(0, control), brake = Mathf.Max(0, -control);
+            float gain = volume * MotorVolume * (Mathf.Lerp(.38f, .8f, speed) + load * .16f) * (1 - brake * .4f);
+            motorGain = Smooth(motorGain, gain, dt, .18f);
+            if (!UsingMotorLoops)
+            {
+                MotorSource.volume = motorGain;
+                MotorSource.pitch = Smooth(MotorSource.pitch, Mathf.Lerp(.55f, 1.65f, speed), dt, .25f);
+                return;
+            }
+            motorSpeed = Smooth(motorSpeed, World.SpeedKmh, dt, .25f);
+            MotorLoops.Evaluate(motorSpeed, out Vector3 weights, out Vector3 pitches);
+            MotorBandWeights = weights;
+            for (int n = 0; n < motors.Length; n++)
+            {
+                motors[n].volume = motorGain * weights[n];
+                motors[n].pitch = pitches[n];
+                motorFilters[n].cutoffFrequency = Smooth(motorFilters[n].cutoffFrequency,
+                    Mathf.Lerp(4500, 9000, speed) + load * 3000, dt, .18f);
+            }
+        }
+
         void UpdatePasses(bool active, float dt)
         {
             ActivePassVoices = 0;
@@ -141,20 +186,23 @@ namespace HighwaySurfing
                 if (!source.isPlaying) continue;
                 ActivePassVoices++;
                 passAge[n] += dt;
-                float phase = Mathf.Clamp01(passAge[n] * passPitch[n] / Mathf.Max(.01f, PassByClip.length));
-                source.pitch = passPitch[n] * Mathf.Lerp(1.08f, .88f, phase);
-                source.panStereo = passPan[n] * Mathf.Sin(phase * Mathf.PI);
+                float phase = Mathf.Clamp01(passAge[n] * passPitch[n] / Mathf.Max(.01f, source.clip.length));
+                // Real recordings already contain the passing Doppler shift. Keep their pitch steady.
+                source.pitch = passPitch[n] * (RecordedPassBy ? 1 : Mathf.Lerp(1.08f, .88f, phase));
+                source.panStereo = RecordedPassBy ? passPan[n] : passPan[n] * Mathf.Sin(phase * Mathf.PI);
                 source.volume = (SoundEnabled ? MasterVolume * PassByVolume : 0) * RideFade * passGain[n];
             }
             float route = World.RouteDistance;
             float speed = World.SpeedKmh / 3.6f;
-            int lamp = Mathf.FloorToInt((route + speed * .12f) / 42);
+            float lampPitch = Mathf.Lerp(1.1f, 1.65f, Mathf.Clamp01(speed / 62));
+            int lamp = Mathf.FloorToInt((route + speed * StreetPassPeakSeconds / lampPitch) / 42);
             // Ignore resets, wrapping traffic and the first frame after registration / pause.
             bool continuous = active && observing && route >= previousRoute && route - previousRoute < 10;
             if (continuous && SoundEnabled && speed > 4 && lamp > previousLamp && lamp > lastLampSound)
             {
                 float dx = -2.4f - World.LateralPosition;
-                if (PlayPass(.18f + Mathf.Clamp01(speed / 60) * .12f, dx / 10, Mathf.Lerp(1.1f, 1.65f, speed / 62)))
+                if (PlayPass(StreetPassClip != null ? StreetPassClip : PassByClip,
+                    .18f + Mathf.Clamp01(speed / 60) * .12f, dx / 10, lampPitch))
                     StreetPassCount++;
                 lastLampSound = lamp;
             }
@@ -162,8 +210,9 @@ namespace HighwaySurfing
             {
                 World.SampleTraffic(n, out float distance, out float lane, out float relativeSpeed);
                 float magnitude = Mathf.Abs(relativeSpeed);
-                float pitch = Mathf.Lerp(.75f, 1.5f, Mathf.Clamp01(magnitude / 80));
-                float lead = magnitude * .16f / pitch;
+                float pitch = RecordedPassBy ? Mathf.Lerp(.9f, 1.25f, Mathf.Clamp01(magnitude / 80)) :
+                    Mathf.Lerp(.75f, 1.5f, Mathf.Clamp01(magnitude / 80));
+                float lead = magnitude * PassByPeakSeconds / pitch;
                 bool crossing = relativeSpeed < 0 ? previousTraffic[n] > lead && distance <= lead : previousTraffic[n] < -lead && distance >= -lead;
                 if (continuous && SoundEnabled && magnitude > 2 && crossing && Mathf.Abs(distance - previousTraffic[n]) < 10 &&
                     Time.unscaledTime - lastVehicleSound[n] > 1)
@@ -171,7 +220,7 @@ namespace HighwaySurfing
                     float dx = lane - World.LateralPosition;
                     float proximity = 1 / (1 + Mathf.Abs(dx) * .27f);
                     float gain = proximity * Mathf.Lerp(.18f, 1, Mathf.Clamp01(magnitude / 50));
-                    if (PlayPass(gain, Mathf.Clamp(dx / 8, -.85f, .85f), pitch)) VehiclePassCount++;
+                    if (PlayPass(PassByClip, gain, Mathf.Clamp(dx / 8, -.85f, .85f), pitch)) VehiclePassCount++;
                     lastVehicleSound[n] = Time.unscaledTime;
                 }
                 previousTraffic[n] = distance;
@@ -180,16 +229,18 @@ namespace HighwaySurfing
             previousLamp = lamp; previousRoute = route; observing = active;
         }
 
-        bool PlayPass(float gain, float pan, float pitch)
+        bool PlayPass(AudioClip clip, float gain, float pan, float pitch)
         {
-            if (PassByClip == null || RideFade < .3f) return false;
+            if (clip == null || RideFade < .3f) return false;
             for (int n = 0; n < passes.Length; n++)
             {
                 var source = passes[n];
                 if (source.isPlaying) continue;
+                source.clip = clip;
                 passAge[n] = 0; passGain[n] = gain; passPan[n] = pan; passPitch[n] = pitch;
                 source.volume = MasterVolume * PassByVolume * RideFade * gain;
-                source.panStereo = pan * .2f; source.pitch = pitch * 1.08f;
+                source.panStereo = RecordedPassBy ? pan : pan * .2f;
+                source.pitch = pitch * (RecordedPassBy ? 1 : 1.08f);
                 source.Play(); return true;
             }
             return false;
