@@ -1,6 +1,6 @@
 # KinectでMainを走る
 
-元の統合版は `codex/kinect-highway-integration`（`a2efb4b`）に保存しています。腕による速度操作の試作は `codex/arm-speed-control` です。プロジェクトは `highway-surfing`、シーンは `Assets/Scenes/Main.unity` です。
+元の統合版は `codex/kinect-highway-integration`（`a2efb4b`）に保存しています。腕による速度操作は現在の `main`（実装コミット `3d3385e`）にあります。プロジェクトは `highway-surfing`、シーンは `Assets/Scenes/Main.unity` です。
 `Assets/Scenes/Sandbox/KinectDebug.unity` は骨格・配置の比較用に残しています。
 
 ## 今回の45°条件で試す
