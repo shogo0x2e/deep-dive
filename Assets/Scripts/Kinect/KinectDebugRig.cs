@@ -77,6 +77,17 @@ namespace HighwaySurfing.Kinect
             position = Joints[index].position;
             return float.IsFinite(position.x) && float.IsFinite(position.y) && float.IsFinite(position.z);
         }
+        public SurfPoseDetector.Guidance PoseGuidance => IsTracked && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 ?
+            SurfPoseDetector.GetGuidance(Joints[0].position, Joints[2].position, Joints[5].position, Joints[12].position,
+                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right) : new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.ShowArms);
+        public bool TryGetRidingPose(out bool riding)
+        {
+            riding = false;
+            if (!TryGetJointPosition(5, out var ls) || !TryGetJointPosition(12, out var rs) ||
+                !TryGetJointPosition(7, out var lw) || !TryGetJointPosition(14, out var rw)) return false;
+            riding = SurfPoseDetector.IsRiding(ls, rs, lw, rw, ScreenReference.up, ScreenReference.forward, MeasuredDegrees);
+            return true;
+        }
         public static readonly string[] JointNames = {
             "Pelvis","SpineNavel","SpineChest","Neck","ClavicleLeft","ShoulderLeft","ElbowLeft","WristLeft","HandLeft","HandTipLeft","ThumbLeft",
             "ClavicleRight","ShoulderRight","ElbowRight","WristRight","HandRight","HandTipRight","ThumbRight",

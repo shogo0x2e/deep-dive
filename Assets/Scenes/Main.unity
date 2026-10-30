@@ -9397,6 +9397,7 @@ MonoBehaviour:
   EnableAutomaticCalibration: 1
   PoseHoldSeconds: 0.65
   DepartureGraceSeconds: 3
+  PoseReleaseSeconds: 1.5
   Sensitivity: 1
   InvertSteering: 0
 --- !u!114 &2111728934

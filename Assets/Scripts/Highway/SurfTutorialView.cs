@@ -13,7 +13,7 @@ namespace HighwaySurfing
         UniversalAdditionalCameraData cameraData;
         bool restorePostProcessing;
         public const string ControlsHint = "左にかたむくと左へ    右にかたむくと右へ\n画面側の手を上げるとブレーキ、下げるとアクセル";
-        public const string FontCharacters = "HIGHWAY SURFING 0123456789手を前と後ろにひろげてくださいそのまま、少しだけキープただいま準備しています画面の前に立って、全身を見せてくださいからだをまっすぐにして、そのまま静止します肩の高さで腕をのばして、サーフィンのポーズ！ポーズを合わせると、自動で始まります左にかたむくと左へ右にかたむくと右へ夜のハイウェイへようこそ" + ControlsHint;
+        public const string FontCharacters = "HIGHWAY SURFING 0123456789手を前と後ろにひろげてくださいそのまま、少しだけキープただいま準備しています画面の前に立って、全身を見せてくださいからだをまっすぐにして、そのまま静止します肩の高さで腕をのばして、サーフィンのポーズ！ポーズを合わせると、自動で始まります左にかたむくと左へ右にかたむくと右へ夜のハイウェイへようこそ" + ControlsHint + SurfPoseGuidanceText.FontCharacters;
         void OnEnable()
         {
             if (Input == null || Input.World == null) return;
