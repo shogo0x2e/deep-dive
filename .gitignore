@@ -6,6 +6,8 @@
 /[Bb]uild/
 /[Bb]uilds/
 /.Local/
+/Assets/.Local/
+/Assets/.Local.meta
 /.Worktrees/
 /.vscode/
 /.vs/
