@@ -12,7 +12,16 @@ namespace HighwaySurfing
         public KinectDebugRig Rig;
         public bool AutoStartKinect = true;
         public bool EnableAutomaticCalibration = true;
+        [Header("Start pose")]
+        [Tooltip("Easier arm pose, shorter neutral registration, and tolerance for brief pose flicker. Turn off to restore the original strict entry.")]
+        public bool RelaxedEntry = true;
+        [Tooltip("Required pose hold when Relaxed Entry is off.")]
         [Range(.2f,2)] public float PoseHoldSeconds = .65f;
+        [Range(.2f,2)] public float RelaxedPoseHoldSeconds = .35f;
+        [Tooltip("Brief arm pose/confidence interruptions allowed during relaxed entry. A valid pose is still required to begin registration.")]
+        [Range(0,.6f)] public float PoseLossGraceSeconds = .3f;
+        [Tooltip("A new coarse instruction must persist this long before the modal changes.")]
+        [Range(.2f,1)] public float GuidanceChangeDelaySeconds = .45f;
         [Range(1,10)] public float DepartureGraceSeconds = 3;
         [Range(.5f,5)] public float PoseReleaseSeconds = 1.5f;
         [Range(.25f,2)] public float Sensitivity = 1;
@@ -24,18 +33,24 @@ namespace HighwaySurfing
         public bool IdentityRegistered => identitySet && Rig != null && Rig.LockSelectedPerson && Rig.BodyId == registeredId;
         public bool RideRegistered => IdentityRegistered && Rig.Calibrated;
         public bool ShowTutorial => KinectMode && !RideRegistered;
+        public float RequiredPoseHoldSeconds => Mathf.Max(.1f, RelaxedEntry ? RelaxedPoseHoldSeconds : PoseHoldSeconds);
         public float RegistrationProgress => RideRegistered ? 1 : Rig != null && Rig.Calibrating ? .3f + .7f * Rig.CalibrationProgress :
-            poseSince >= 0 ? .3f * Mathf.Clamp01((Time.unscaledTime-poseSince)/PoseHoldSeconds) : 0;
-        public string TutorialTitle => Rig != null && Rig.Calibrating ? "そのまま、少しだけキープ" :
-            SourceReady && Rig.IsTracked ? SurfPoseGuidanceText.Title(displayedGuidance) : "手を前と後ろに\nひろげてください";
-        public string TutorialMessage => !SourceReady ? "ただいま準備しています" : Rig == null || !Rig.IsTracked ?
-            "画面の前に立って、全身を見せてください" : Rig.Calibrating ? "からだをまっすぐにして、そのまま静止します" :
+            poseSince >= 0 ? .3f * Mathf.Clamp01((Time.unscaledTime-poseSince)/RequiredPoseHoldSeconds) : 0;
+        public string TutorialTitle => Rig != null && Rig.Calibrating ? SurfPoseGuidanceText.HoldTitle :
+            SourceReady && showingPoseGuidance ? SurfPoseGuidanceText.Title(displayedGuidance) : "手を前と後ろに\nひろげてください";
+        public string TutorialMessage => !SourceReady ? "ただいま準備しています" : !showingPoseGuidance && !Rig.Calibrating ?
+            "画面の前に立って、全身を見せてください" : Rig.Calibrating ?
+            (RelaxedEntry ? "そのまま1秒、\n維持してください" : "からだをまっすぐにして、そのまま静止します") :
             SurfPoseGuidanceText.Instruction(displayedGuidance, Rig);
         bool identitySet, waitingForCalibration;
         uint registeredId;
         uint poseCandidateId;
         float poseSince = -1, lastPresence;
+        float lastReadyPoseTime = float.NegativeInfinity;
+        uint lastReadyPoseBody;
         float poseLostSince = -1, guidanceSince;
+        float lastGuidanceTracked = float.NegativeInfinity;
+        bool showingPoseGuidance;
         uint guidanceBody;
         SurfPoseDetector.Guidance displayedGuidance = new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.OpenArms);
         SurfPoseDetector.Guidance pendingGuidance;
@@ -46,12 +61,14 @@ namespace HighwaySurfing
         {
             if (Rig == null || World == null) { enabled=false; return; }
             Rig.EnableKeyboardShortcuts=false;
+            Rig.RelaxedStartPose=RelaxedEntry;
             World.UseExternalSteering=true;
             if (AutoStartKinect) StartSensor();
         }
         void Update()
         {
             if (Rig == null || World == null) return;
+            Rig.RelaxedStartPose=RelaxedEntry;
             var keyboard=Keyboard.current;
             if (keyboard != null && keyboard.cKey.wasPressedThisFrame) RequestCalibration();
             if (keyboard != null && keyboard.kKey.wasPressedThisFrame) UseKeyboard();
@@ -91,38 +108,53 @@ namespace HighwaySurfing
         void UpdateTutorialGuidance()
         {
             if (!SourceReady || !Rig.IsTracked)
-            { displayedGuidance = new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.OpenArms); guidanceBody = 0; return; }
-            var next = Rig.PoseGuidance;
-            if (next.Action == SurfPoseDetector.Adjustment.Ready)
-            { displayedGuidance = pendingGuidance = next; guidanceSince = Time.unscaledTime; guidanceBody = Rig.BodyId; return; }
-            if (guidanceBody != Rig.BodyId || next.Action != pendingGuidance.Action || next.Wrist != pendingGuidance.Wrist)
+            {
+                // A single missing tracking frame should not flash the waiting message.
+                if (SourceReady && Rig.BodyId==guidanceBody && Time.unscaledTime-lastGuidanceTracked<GuidanceChangeDelaySeconds) return;
+                showingPoseGuidance=false;
+                displayedGuidance = new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.OpenArms); guidanceBody = 0; return;
+            }
+            lastGuidanceTracked=Time.unscaledTime; showingPoseGuidance=true;
+            var next = SurfPoseGuidanceText.Simplify(Rig.PoseGuidance);
+            if (Rig.Calibrating)
+            { displayedGuidance = pendingGuidance = new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.Ready); guidanceSince = Time.unscaledTime; guidanceBody = Rig.BodyId; return; }
+            if (guidanceBody != Rig.BodyId || next.Action != pendingGuidance.Action)
             { pendingGuidance = next; guidanceSince = Time.unscaledTime; guidanceBody = Rig.BodyId; }
-            // Keep small tracking fluctuations from rapidly alternating instructions.
-            if (Time.unscaledTime - guidanceSince >= .25f) displayedGuidance = pendingGuidance;
+            // Ignore fine height/left-right changes; only switch on a sustained coarse action.
+            if (Time.unscaledTime - guidanceSince >= GuidanceChangeDelaySeconds) displayedGuidance = pendingGuidance;
         }
         void UpdateAutomaticEntry()
         {
             if (!EnableAutomaticCalibration || !SourceReady || !ValidSource) return;
+            bool poseReady = Rig.SurfPoseReady;
+            if (poseReady) { lastReadyPoseTime=Time.unscaledTime; lastReadyPoseBody=Rig.BodyId; }
             if (waitingForCalibration)
             {
-                if (Rig.Calibrating && !Rig.SurfPoseReady)
+                if (Rig.Calibrating && !poseReady && !WithinPoseGrace(registeredId))
                 { Rig.ClearCalibration(); waitingForCalibration=false; poseSince=-1; }
                 else if (!Rig.Calibrating) { waitingForCalibration=false; poseSince=-1; }
                 return;
             }
             if (RideRegistered) return;
-            if (!Rig.SurfPoseReady) { poseSince=-1; return; }
+            if (!poseReady)
+            {
+                if (!WithinPoseGrace(poseCandidateId)) poseSince=-1;
+                return; // Never start from stale or currently missing arms.
+            }
             if (poseSince < 0 || poseCandidateId != Rig.BodyId)
             { poseSince=Time.unscaledTime; poseCandidateId=Rig.BodyId; }
-            if (Time.unscaledTime-poseSince < PoseHoldSeconds) return;
+            if (Time.unscaledTime-poseSince < RequiredPoseHoldSeconds) return;
             Rig.LockSelectedPerson=true; registeredId=Rig.BodyId; identitySet=true; lastPresence=Time.unscaledTime;
             Rig.BeginCalibration(); waitingForCalibration=Rig.Calibrating; poseSince=-1;
         }
+        bool WithinPoseGrace(uint body) => RelaxedEntry && Rig.IsTracked && Rig.BodyId==body &&
+            lastReadyPoseBody==body && Time.unscaledTime-lastReadyPoseTime<=Mathf.Clamp(PoseLossGraceSeconds,0,.6f);
         public void RequestCalibration()
         {
             if (Rig == null || World == null) return;
             if (!KinectMode || !SourceReady) StartSensor();
             Rig.ClearCalibration(); waitingForCalibration=false; poseSince=-1;
+            lastReadyPoseTime=float.NegativeInfinity;
             World.SteeringInput=0; World.ExternalRideReady=World.ExternalSteeringAvailable=false;
         }
         public void StartSensor()
@@ -146,9 +178,10 @@ namespace HighwaySurfing
         void ClearRegistration()
         {
             identitySet=waitingForCalibration=InputAvailable=false; poseSince=poseLostSince=-1;
+            lastReadyPoseTime=float.NegativeInfinity;
             if (Rig != null) { Rig.LockSelectedPerson=false; Rig.ClearCalibration(); }
             if (World != null) { World.SteeringInput=0; World.ExternalSteeringAvailable=World.ExternalRideReady=false; }
         }
-        void OnDisable() { ClearRegistration(); if (Rig != null) Rig.StopKinect(); }
+        void OnDisable() { ClearRegistration(); if (Rig != null) { Rig.RelaxedStartPose=false; Rig.StopKinect(); } }
     }
 }

@@ -46,12 +46,15 @@ namespace HighwaySurfing.Kinect
         public bool IsTracked { get; private set; }
         public bool Calibrated => solver.Calibrated;
         public bool Calibrating => calibrating;
+        // The ride adapter selects this profile; the standalone skeleton Sandbox stays strict.
+        public bool RelaxedStartPose { get; set; }
+        public float CalibrationHoldSeconds => RelaxedStartPose ? 1f : 1.5f;
         public bool SelectedBodyPresent => bodyAvailable && float.IsFinite(ResultAgeMs) && ResultAgeMs <= MaximumFrameAge * 1000;
         public bool SurfPoseReady => IsTracked && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 &&
             SurfPoseDetector.IsOpen(Joints[0].position, Joints[2].position, Joints[5].position, Joints[12].position,
-                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right);
+                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right, RelaxedStartPose);
         public string CalibrationFeedback { get; private set; } = "";
-        public float CalibrationProgress => calibrating ? Mathf.Clamp01((Time.unscaledTime - calibrationStarted) / 1.5f) : 0;
+        public float CalibrationProgress => calibrating ? Mathf.Clamp01((Time.unscaledTime - calibrationStarted) / CalibrationHoldSeconds) : 0;
         public float RawDegrees => solver.RawDegrees;
         public float MeasuredDegrees { get; private set; }
         public float RawSteer => solver.RawSteer;
@@ -79,7 +82,7 @@ namespace HighwaySurfing.Kinect
         }
         public SurfPoseDetector.Guidance PoseGuidance => IsTracked && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 ?
             SurfPoseDetector.GetGuidance(Joints[0].position, Joints[2].position, Joints[5].position, Joints[12].position,
-                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right) : new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.ShowArms);
+                Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right, RelaxedStartPose) : new SurfPoseDetector.Guidance(SurfPoseDetector.Adjustment.ShowArms);
         public bool TryGetRidingPose(out bool riding)
         {
             riding = false;
@@ -184,7 +187,7 @@ namespace HighwaySurfing.Kinect
             calibrationSum = calibrationPelvisSum = 0; calibrationCount = 0;
             calibrationMin = calibrationPelvisMin = float.PositiveInfinity;
             calibrationMax = calibrationPelvisMax = float.NegativeInfinity;
-            CalibrationFeedback = Status = "Hold your neutral surfing stance for 1.5 s";
+            CalibrationFeedback = Status = $"Hold your neutral surfing stance for {CalibrationHoldSeconds:0.0} s";
         }
         public void ClearCalibration()
         { solver.Reset(); calibrating = false; CalibrationFeedback = ""; }
@@ -318,10 +321,11 @@ namespace HighwaySurfing.Kinect
                     calibrationSum += angle; calibrationPelvisSum += x; calibrationCount++;
                     calibrationMin = Mathf.Min(calibrationMin, angle); calibrationMax = Mathf.Max(calibrationMax, angle);
                     calibrationPelvisMin = Mathf.Min(calibrationPelvisMin, x); calibrationPelvisMax = Mathf.Max(calibrationPelvisMax, x);
-                    if (Time.unscaledTime - calibrationStarted >= 1.5f && calibrationCount >= 8)
+                    if (Time.unscaledTime - calibrationStarted >= CalibrationHoldSeconds && calibrationCount >= 8)
                     {
                         calibrating = false;
-                        if (calibrationMax - calibrationMin > 4 || calibrationPelvisMax - calibrationPelvisMin > 0.08f)
+                        if (calibrationMax - calibrationMin > (RelaxedStartPose ? 8 : 4) ||
+                            calibrationPelvisMax - calibrationPelvisMin > (RelaxedStartPose ? .14f : .08f))
                             CalibrationFeedback = Status = "Moved during calibration. Hold still and retry.";
                         else { solver.Calibrate(calibrationSum / calibrationCount, calibrationPelvisSum / calibrationCount); CalibrationFeedback = Status = "Neutral calibrated"; }
                     }

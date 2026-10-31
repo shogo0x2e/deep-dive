@@ -36,7 +36,7 @@ namespace HighwaySurfing
             Title.text=Input.TutorialTitle;
             Instruction.text=Input.TutorialMessage;
             ProgressFill.fillAmount=Input.RegistrationProgress;
-            ProgressText.text=Input.Rig.Calibrating?"そのまま、少しだけキープ":"ポーズを合わせると、自動で始まります";
+            ProgressText.text=Input.Rig.Calibrating && Input.RelaxedEntry ? "そのまま1秒、維持してください" : "ポーズを合わせると、自動で始まります";
         }
     }
 }

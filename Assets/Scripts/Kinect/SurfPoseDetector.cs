@@ -14,11 +14,11 @@ namespace HighwaySurfing.Kinect
             public Guidance(Adjustment action, int wrist = 0, float error = 0) { Action = action; Wrist = wrist; Error = error; }
         }
         public static bool IsOpen(Vector3 pelvis, Vector3 chest, Vector3 leftShoulder, Vector3 rightShoulder,
-            Vector3 leftWrist, Vector3 rightWrist, Vector3 up, Vector3 screenRight)
-            => GetGuidance(pelvis, chest, leftShoulder, rightShoulder, leftWrist, rightWrist, up, screenRight).Action == Adjustment.Ready;
+            Vector3 leftWrist, Vector3 rightWrist, Vector3 up, Vector3 screenRight, bool relaxed = false)
+            => GetGuidance(pelvis, chest, leftShoulder, rightShoulder, leftWrist, rightWrist, up, screenRight, relaxed).Action == Adjustment.Ready;
 
         public static Guidance GetGuidance(Vector3 pelvis, Vector3 chest, Vector3 leftShoulder, Vector3 rightShoulder,
-            Vector3 leftWrist, Vector3 rightWrist, Vector3 up, Vector3 screenRight)
+            Vector3 leftWrist, Vector3 rightWrist, Vector3 up, Vector3 screenRight, bool relaxed = false)
         {
             Vector3 shoulders = leftShoulder - rightShoulder;
             Vector3 left = leftWrist - leftShoulder, right = rightWrist - rightShoulder;
@@ -26,28 +26,28 @@ namespace HighwaySurfing.Kinect
             if (!Finite(shoulders) || !Finite(left) || !Finite(right) || !Finite(torso)) return new Guidance(Adjustment.ShowArms);
             float width = shoulders.magnitude, height = Vector3.Dot(torso, up);
             if (width < .14f || width > .8f || height < .12f || torso.magnitude > .9f) return new Guidance(Adjustment.StraightenBody);
-            if (Mathf.Abs(Mathf.Atan2(Vector3.Dot(torso, screenRight), height) * Mathf.Rad2Deg) > 12) return new Guidance(Adjustment.StraightenBody);
-            float minimumReach = Mathf.Clamp(width * .9f, .2f, .35f);
-            var l = Arm(left, shoulders.normalized, up, minimumReach, 7);
-            var r = Arm(right, -shoulders.normalized, up, minimumReach, 14);
+            if (Mathf.Abs(Mathf.Atan2(Vector3.Dot(torso, screenRight), height) * Mathf.Rad2Deg) > (relaxed ? 20 : 12)) return new Guidance(Adjustment.StraightenBody);
+            float minimumReach = relaxed ? Mathf.Clamp(width * .6f, .2f, .28f) : Mathf.Clamp(width * .9f, .2f, .35f);
+            var l = Arm(left, shoulders.normalized, up, minimumReach, 7, relaxed);
+            var r = Arm(right, -shoulders.normalized, up, minimumReach, 14, relaxed);
             if (l.Action == Adjustment.Ready) return r;
             if (r.Action == Adjustment.Ready) return l;
             var worst = l.Error >= r.Error ? l : r;
             // For opposite corrections, name just the arm which needs the larger adjustment.
             return l.Action == r.Action ? new Guidance(worst.Action, 0, worst.Error) : worst;
         }
-        static Guidance Arm(Vector3 arm, Vector3 outward, Vector3 up, float minimumReach, int wrist)
+        static Guidance Arm(Vector3 arm, Vector3 outward, Vector3 up, float minimumReach, int wrist, bool relaxed)
         {
             float reach = arm.magnitude;
             if (reach < minimumReach) return new Guidance(Adjustment.ExtendArms, wrist, 1);
             if (reach >= 1.1f) return new Guidance(Adjustment.ShowArms, wrist, 1);
-            float height = Vector3.Dot(arm, up), limit = Mathf.Max(.14f, reach * .4f);
+            float height = Vector3.Dot(arm, up), limit = relaxed ? Mathf.Max(.18f, reach * .72f) : Mathf.Max(.14f, reach * .4f);
             float ratio = height / reach;
             if (height < -limit)
                 return new Guidance(ratio < -.85f ? Adjustment.RaiseArms : ratio < -.6f ? Adjustment.RaiseMore : Adjustment.RaiseSlightly, wrist, -ratio);
             if (height > limit)
                 return new Guidance(ratio > .65f ? Adjustment.LowerArms : Adjustment.LowerSlightly, wrist, ratio);
-            return Vector3.Dot(arm.normalized, outward) > .72f ? new Guidance(Adjustment.Ready) : new Guidance(Adjustment.OpenArms, wrist, .8f);
+            return Vector3.Dot(arm.normalized, outward) > (relaxed ? .45f : .72f) ? new Guidance(Adjustment.Ready) : new Guidance(Adjustment.OpenArms, wrist, .8f);
         }
 
         // Riding permits accelerator/brake pitch and steering lean. Only dropping/folding

@@ -9810,7 +9810,11 @@ MonoBehaviour:
   Rig: {fileID: 2111728934}
   AutoStartKinect: 1
   EnableAutomaticCalibration: 1
+  RelaxedEntry: 1
   PoseHoldSeconds: 0.65
+  RelaxedPoseHoldSeconds: 0.35
+  PoseLossGraceSeconds: 0.3
+  GuidanceChangeDelaySeconds: 0.45
   DepartureGraceSeconds: 3
   PoseReleaseSeconds: 1.5
   Sensitivity: 1
