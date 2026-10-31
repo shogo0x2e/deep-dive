@@ -13,7 +13,7 @@ namespace HighwaySurfing
         [Min(.5f)] public float IdleSeconds = 5;
         [Range(0, 1)] public float IdleModalOpacity = .15f;
         public KinectPresenceArea PresenceArea = new KinectPresenceArea {
-            Enabled = true, DepthMetres = new Vector2(.5f, 3.5f), HalfWidthMetres = 1.5f
+            Enabled = true, DepthMetres = new Vector2(.5f, 2f), HalfWidthMetres = 1.5f
         };
         public bool DemoActive { get; private set; }
         public bool PersonInArea { get; private set; }

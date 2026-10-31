@@ -36,7 +36,7 @@ public static class AttractModePlayChecks
         return "Attract Main simulation running; .Local/Review/attract-mode-trial.txt";
     }
     static void Outside(){attract.PresenceArea.DepthMetres=new Vector2(10,11);}
-    static void Inside(){attract.PresenceArea.DepthMetres=new Vector2(.5f,3.5f);}
+    static void Inside(){attract.PresenceArea.DepthMetres=new Vector2(.5f,2f);}
     static void Next(int next){phase=next;since=EditorApplication.timeSinceStartup;}
     static void Check(bool ok,string name){if(!ok)throw new Exception(name);report.Add("PASS "+name);}
     static void Tick()
