@@ -20,13 +20,14 @@ namespace HighwaySurfing
         public float ModalOpacity => DemoActive ? Mathf.Clamp01(IdleModalOpacity) : 1;
 
         KinectArmSpeedInput armSpeed;
+        bool wasRegistered;
         float lastPresence, targetLateral = -3.1f;
         void Awake()
         {
             if (Input == null) Input = GetComponent<KinectHighwayInput>();
             armSpeed = GetComponent<KinectArmSpeedInput>();
         }
-        void OnEnable() { lastPresence = Time.unscaledTime; ApplyArea(); }
+        void OnEnable() { lastPresence = Time.unscaledTime; wasRegistered = false; ApplyArea(); }
         void ApplyArea()
         {
             if (Input != null && Input.Rig != null)
@@ -38,8 +39,13 @@ namespace HighwaySurfing
             ApplyArea();
             PersonInArea = (!Input.Rig.Simulation || Input.AllowSimulationForTesting) && Input.Rig.HasPersonInEntryArea;
             bool available = EnableAttractMode && Input.isActiveAndEnabled && Input.KinectMode;
+            bool departed = wasRegistered && !Input.RideRegistered;
+            wasRegistered = Input.RideRegistered;
             if (!available || PersonInArea || Input.RideRegistered || Input.Rig.Calibrating)
                 lastPresence = Time.unscaledTime;
+            else if (departed)
+                // Departure already had its own grace period. Do not add another idle wait.
+                lastPresence = Time.unscaledTime - Mathf.Max(.5f, IdleSeconds);
             bool demo = available && !Input.RideRegistered && !Input.Rig.Calibrating && !PersonInArea &&
                 Time.unscaledTime - lastPresence >= Mathf.Max(.5f, IdleSeconds);
             if (demo && !DemoActive) targetLateral = Input.World.LateralPosition;
@@ -77,7 +83,7 @@ namespace HighwaySurfing
         }
         void OnDisable()
         {
-            DemoActive = PersonInArea = false;
+            DemoActive = PersonInArea = wasRegistered = false;
             if (Input == null) return;
             if (Input.World != null) Input.World.AttractDemoActive = false;
             if (Input.Rig != null) Input.Rig.EntryArea = default;

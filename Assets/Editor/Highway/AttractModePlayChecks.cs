@@ -95,8 +95,8 @@ public static class AttractModePlayChecks
                     Outside();Next(9);break;
                 case 9:
                     if(age<3.3)return;
-                    Check(input.RideRegistered && !attract.DemoActive,"registered tracked player is not released at ROI boundary");
-                    input.ReleasePerson();input.Rig.StopKinect();Next(10);break;
+                    Check(!input.RideRegistered && attract.DemoActive,"registered player outside ROI departs after grace and starts demo without extra wait");
+                    input.Rig.StopKinect();Next(10);break;
                 case 10:
                     if(age<1)return;
                     Check(attract.DemoActive && !input.RideRegistered,"empty/disconnected sensor returns to demo");

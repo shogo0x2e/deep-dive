@@ -9817,7 +9817,8 @@ MonoBehaviour:
   RelaxedPoseHoldSeconds: 0.35
   PoseLossGraceSeconds: 0.3
   GuidanceChangeDelaySeconds: 0.45
-  DepartureGraceSeconds: 6
+  ReleaseOutsideEntryArea: 1
+  DepartureGraceSeconds: 3
   ReleaseOnPoseLoss: 0
   PoseReleaseSeconds: 5
   Sensitivity: 1

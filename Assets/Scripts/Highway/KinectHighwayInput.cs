@@ -23,8 +23,10 @@ namespace HighwaySurfing
         [Tooltip("A new coarse instruction must persist this long before the modal changes.")]
         [Range(.2f,1)] public float GuidanceChangeDelaySeconds = .45f;
         [Header("Leaving the ride")]
-        [Tooltip("Continuous absence of the registered person before returning to the tutorial. Brief tracking loss does not release the rider.")]
-        [Range(1,15)] public float DepartureGraceSeconds = 6;
+        [Tooltip("Use the play area for both entry and departure. Leaving the area pauses motion immediately; returning within the grace period resumes the same ride. Off uses sensor presence alone for departure.")]
+        public bool ReleaseOutsideEntryArea = true;
+        [Tooltip("Continuous absence of the registered person from the play area before releasing the ride. Returning cancels the pending departure.")]
+        [Range(1,15)] public float DepartureGraceSeconds = 3;
         [Tooltip("Optional: also end a ride after a continuously observed lowered/folded arm pose. Off keeps riding while the person is still present.")]
         public bool ReleaseOnPoseLoss = false;
         [Tooltip("Only used when Release On Pose Loss is enabled. Uncertain/missing joints do not count toward this timer.")]
@@ -38,6 +40,8 @@ namespace HighwaySurfing
         public bool InputAvailable { get; private set; }
         public bool IdentityRegistered => identitySet && Rig != null && Rig.LockSelectedPerson && Rig.BodyId == registeredId;
         public bool RideRegistered => IdentityRegistered && Rig.Calibrated;
+        public bool RegisteredPersonPresent => IdentityRegistered &&
+            (ReleaseOutsideEntryArea ? Rig.SelectedBodyInEntryArea : Rig.SelectedBodyPresent);
         public bool ShowTutorial => KinectMode && !RideRegistered;
         public float RequiredPoseHoldSeconds => Mathf.Max(.1f, RelaxedEntry ? RelaxedPoseHoldSeconds : PoseHoldSeconds);
         public float RegistrationProgress => RideRegistered ? 1 : Rig != null && Rig.Calibrating ? .3f + .7f * Rig.CalibrationProgress :
@@ -87,14 +91,15 @@ namespace HighwaySurfing
             if (identitySet && (!Rig.LockSelectedPerson || Rig.BodyId != registeredId)) ClearRegistration();
             if (identitySet)
             {
-                if (RideRegistered ? Rig.SelectedBodyPresent : Rig.SelectedBodyInEntryArea) lastPresence=Time.unscaledTime;
+                if (RideRegistered ? RegisteredPersonPresent : Rig.SelectedBodyInEntryArea) lastPresence=Time.unscaledTime;
                 else if (Time.unscaledTime-lastPresence >= DepartureGraceSeconds)
                 { ReleasePerson(); World.ResetRide(); }
             }
             UpdateRidePose();
             UpdateAutomaticEntry();
             UpdateTutorialGuidance();
-            bool ready=SourceReady && ValidSource && RideRegistered && !waitingForCalibration;
+            bool ready=SourceReady && ValidSource && RideRegistered && !waitingForCalibration &&
+                (!ReleaseOutsideEntryArea || RegisteredPersonPresent);
             InputAvailable=ready && Rig.IsTracked;
             World.ExternalRideReady=ready;
             World.ExternalSteeringAvailable=InputAvailable;
@@ -106,6 +111,7 @@ namespace HighwaySurfing
             if (!SourceReady) Status=Rig.Status;
             else if (!ValidSource) Status="Simulation disabled for riding";
             else if (Rig.Calibrating) Status="Hold surfing pose - registering neutral";
+            else if (RideRegistered && ReleaseOutsideEntryArea && !RegisteredPersonPresent) Status="Outside play area - holding registration";
             else if (ready) Status=Rig.IsTracked ? (World.Paused?"Paused - SPACE to ride":"Ride - lean left / right") : "Tracking lost - lateral movement stopped";
             else Status=Rig.IsTracked ? "Open arms at shoulder height to begin" : "Waiting for nearest person - "+Rig.Status;
         }

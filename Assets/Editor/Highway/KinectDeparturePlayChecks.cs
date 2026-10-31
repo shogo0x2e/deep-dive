@@ -27,7 +27,7 @@ public static class KinectDeparturePlayChecks
         if(input==null || input.AutoStartKinect || input.Rig.CaptureActive)throw new Exception("An explicitly disconnected Main is required.");
         rig=input.Rig;attract=input.GetComponent<HighwayAttractMode>();
         report.Clear();
-        Check(!input.ReleaseOnPoseLoss && input.DepartureGraceSeconds==6 && input.PoseReleaseSeconds==5,"Main persists tolerant departure defaults");
+        Check(input.ReleaseOutsideEntryArea && !input.ReleaseOnPoseLoss && input.DepartureGraceSeconds==3 && input.PoseReleaseSeconds==5,"Main persists area departure defaults");
         input.AllowSimulationForTesting=true;rig.UseSimulation();input.ReleasePerson();
         attract.IdleSeconds=.6f;input.World.ResetRide();running=true;Next(0);
         EditorApplication.update+=Tick;EditorApplication.playModeStateChanged+=OnPlayModeChanged;
@@ -83,20 +83,21 @@ public static class KinectDeparturePlayChecks
                     if(!input.RideRegistered){if(age>3)throw new Exception("Re-registration timed out");return;}
                     Presence(false);Next(7);break;
                 case 7:
-                    if(age<3.2)return;
-                    Check(input.RideRegistered && !input.ShowTutorial,"three-second body dropout retains registration and hides modal");
+                    if(age<1.2)return;
+                    Check(input.RideRegistered && !input.ShowTutorial,"brief body dropout retains registration and hides modal");
                     Check(!input.InputAvailable && input.World.SteeringInput==0,"missing body cannot steer");
+                    Check(!input.World.MotionActive,"missing person pauses forward motion during grace");
                     Presence(true);Next(8);break;
                 case 8:
                     if(age<.3)return;
                     Check(input.RideRegistered && input.InputAvailable,"same person resumes without new registration");
                     Presence(false);Next(9);break;
                 case 9:
-                    if(age<3.2)return;
+                    if(age<1.2)return;
                     Check(input.RideRegistered && !input.ShowTutorial,"separate dropouts are not accumulated");Next(10);break;
                 case 10:
-                    if(age<3.1)return;
-                    Check(!input.RideRegistered && input.ShowTutorial,"six continuous seconds absent releases the person");
+                    if(age<2.1)return;
+                    Check(!input.RideRegistered && input.ShowTutorial,"three continuous seconds absent releases the person");
                     Next(11);break;
                 case 11:
                     if(age<.9)return;
