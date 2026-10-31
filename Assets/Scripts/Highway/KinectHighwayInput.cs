@@ -78,7 +78,11 @@ namespace HighwaySurfing
             var keyboard=Keyboard.current;
             if (keyboard != null && keyboard.cKey.wasPressedThisFrame) RequestCalibration();
             if (keyboard != null && keyboard.kKey.wasPressedThisFrame) UseKeyboard();
-            if (!KinectMode) { Status="Keyboard preview - A / D to steer"; return; }
+            if (!KinectMode)
+            {
+                World.TrafficSteeringScale=1; World.TrafficInputSmoothingSeconds=0;
+                Status="Keyboard preview - A / D to steer"; return;
+            }
             World.UseExternalSteering=true;
             if (identitySet && (!Rig.LockSelectedPerson || Rig.BodyId != registeredId)) ClearRegistration();
             if (identitySet)
@@ -95,6 +99,10 @@ namespace HighwaySurfing
             World.ExternalRideReady=ready;
             World.ExternalSteeringAvailable=InputAvailable;
             World.SteeringInput=InputAvailable ? Mathf.Clamp(Rig.Steer*Sensitivity*(InvertSteering?-1:1),-1,1) : 0;
+            // During a retained registration with no usable steering, rebuild traffic around
+            // a straight clear corridor instead of letting existing cars hit an unsteerable rider.
+            World.TrafficSteeringScale=RideRegistered && !InputAvailable ? 0 : Mathf.Clamp01(Sensitivity);
+            World.TrafficInputSmoothingSeconds=Rig.SmoothingSeconds;
             if (!SourceReady) Status=Rig.Status;
             else if (!ValidSource) Status="Simulation disabled for riding";
             else if (Rig.Calibrating) Status="Hold surfing pose - registering neutral";
@@ -188,6 +196,11 @@ namespace HighwaySurfing
             if (Rig != null) { Rig.LockSelectedPerson=false; Rig.ClearCalibration(); }
             if (World != null) { World.SteeringInput=0; World.ExternalSteeringAvailable=World.ExternalRideReady=false; }
         }
-        void OnDisable() { ClearRegistration(); if (Rig != null) { Rig.RelaxedStartPose=false; Rig.StopKinect(); } }
+        void OnDisable()
+        {
+            ClearRegistration();
+            if (World != null) { World.TrafficSteeringScale=1; World.TrafficInputSmoothingSeconds=0; }
+            if (Rig != null) { Rig.RelaxedStartPose=false; Rig.StopKinect(); }
+        }
     }
 }

@@ -17,11 +17,14 @@ namespace HighwaySurfing
     /// </summary>
     public sealed class HighwayTraffic
     {
-        public const int Count = 18;
+        public const int PerDirectionCount = 18;
+        public const int Count = PerDirectionCount * 2;
         public const float VehicleHalfWidth = .85f;
         public const float PlayerRadius = .45f;
         public const float ContactHalfLength = 3.0f;
         public const float CooldownSeconds = .8f;
+        public const float SafeLateralClearance = VehicleHalfWidth + PlayerRadius + .2f;
+        public const float ReactionSeconds = .8f;
         const float RearLimit = -180f;
         public const float SameDirectionSpeed = 24f;
         const float OppositeSpeed = -28f;
@@ -35,19 +38,39 @@ namespace HighwaySurfing
         readonly Vehicle[] vehicles = new Vehicle[Count];
         readonly int seed;
         readonly float drawDistance;
+        readonly bool dense;
+        public float MinimumHeadway { get; }
+        public bool UsesFixedClearCorridor { get; }
+        public float ClearCorridorCentre { get; private set; }
+        public float RevealClearance => Mathf.Max(110, MinimumHeadway + ContactHalfLength);
         uint random;
         float playerSpeed, cooldown;
 
-        public HighwayTraffic(int seed, float drawDistance)
+        public HighwayTraffic(int seed, float drawDistance, bool dense = true, float lateralSpeed = 3.5f,
+            float inputSmoothingSeconds = 0, float clearCorridorCentre = -3.1f)
         {
             this.seed = seed;
             this.drawDistance = Mathf.Max(500f, drawDistance);
+            this.dense = dense;
+            ClearCorridorCentre = Mathf.Clamp(clearCorridorCentre, -9.5f, -1.5f);
+            // A single obstacle can always be cleared within 2 * SafeLateralClearance,
+            // even from a road edge. Account for reaction, both steering filters (including
+            // reversal), 50 ms frames and time to clear the full longitudinal contact zone.
+            float closingSpeed = Mathf.Max(220f / 3.6f - SameDirectionSpeed, SameDirectionSpeed);
+            float manoeuvreSeconds = ReactionSeconds + 2 * (1f / 9 + Mathf.Max(0, inputSmoothingSeconds)) + .1f +
+                2 * SafeLateralClearance / Mathf.Max(.01f, lateralSpeed);
+            float safeGap = Mathf.Ceil((2 * ContactHalfLength + closingSpeed * manoeuvreSeconds) / 5) * 5;
+            // If steering is disabled or too slow for the visible road, leave a continuous
+            // straight corridor through every same-direction vehicle instead of requiring a turn.
+            UsesFixedClearCorridor = lateralSpeed <= .01f || safeGap > this.drawDistance * .75f;
+            MinimumHeadway = Mathf.Max(dense ? 90 : 150, UsesFixedClearCorridor ? 0 : safeGap);
             Reset();
         }
 
         /// <summary>Restore the exact initial layout and discard contact history.</summary>
-        public void Reset(float playerSpeedKmh = 0)
+        public void Reset(float playerSpeedKmh = 0, float? clearCorridorCentre = null)
         {
+            if (clearCorridorCentre.HasValue) ClearCorridorCentre = Mathf.Clamp(clearCorridorCentre.Value, -9.5f, -1.5f);
             random = unchecked((uint)seed) ^ 0x9e3779b9u;
             if (random == 0) random = 0x6d2b79f5u;
             playerSpeed = Mathf.Clamp(playerSpeedKmh, 0, 220) / 3.6f;
@@ -55,12 +78,12 @@ namespace HighwaySurfing
             for (int group = 0; group < 2; group++)
             {
                 // No traffic can reach the player during the initial steering grace period.
-                float distance = group == 0 ? 110f + Next01() * 30f : 230f + Next01() * 45f;
-                for (int j = 0; j < 9; j++)
+                float distance = group == 0 ? RevealClearance + Next01() * 30f : 230f + Next01() * 45f;
+                for (int j = 0; j < PerDirectionCount; j++)
                 {
-                    int id = group * 9 + j;
+                    int id = group * PerDirectionCount + j;
                     vehicles[id] = MakeVehicle(id, distance);
-                    distance += 150f + Next01() * 45f;
+                    distance += NextHeadway();
                 }
             }
         }
@@ -110,7 +133,11 @@ namespace HighwaySurfing
                     (delta > 0 && vehicle.Distance > vehicle.UpperLimit);
                 if (recycled) Recycle(i, ref vehicle, delta < 0);
                 bool wasVisible = vehicle.Visible;
-                vehicle.Visible = suppressAhead == null || !suppressAhead(vehicle.Distance);
+                bool routeAllows = suppressAhead == null || !suppressAhead(vehicle.Distance);
+                // Cars hidden on a ramp cannot suddenly reappear just in front of the rider.
+                // Keep them hidden until they have enough approach distance on either side.
+                vehicle.Visible = routeAllows && (wasVisible || Mathf.Abs(vehicle.Distance) >=
+                    (i < PerDirectionCount ? RevealClearance : 80));
                 bool endOverlap = Overlaps(vehicle.Distance, vehicle.Lateral - lateral);
                 if (!vehicle.Visible || recycled || !continuous || !wasVisible)
                 {
@@ -160,14 +187,21 @@ namespace HighwaySurfing
         }
         static bool Overlaps(float distance, float lateral) =>
             Mathf.Abs(distance) <= ContactHalfLength && Mathf.Abs(lateral) <= VehicleHalfWidth + PlayerRadius;
-        static float Speed(int index) => index < 9 ? SameDirectionSpeed : OppositeSpeed;
+        static float Speed(int index) => index < PerDirectionCount ? SameDirectionSpeed : OppositeSpeed;
 
         Vehicle MakeVehicle(int id, float distance)
         {
-            // Cover the entire carriageway, including the centre. The common speed and
-            // 150 m minimum headway leave time to steer around consecutive vehicles.
+            // A shared velocity preserves safe headway through player braking/acceleration.
             float lane = -8.65f + Next01() * 6.3f;
-            if (id >= 9) lane = -lane;
+            if (id < PerDirectionCount && UsesFixedClearCorridor)
+            {
+                float leftEnd = Mathf.Min(-2.35f, ClearCorridorCentre - SafeLateralClearance);
+                float rightStart = Mathf.Max(-8.65f, ClearCorridorCentre + SafeLateralClearance);
+                float leftWidth = Mathf.Max(0, leftEnd + 8.65f), rightWidth = Mathf.Max(0, -2.35f - rightStart);
+                float pick = Next01() * (leftWidth + rightWidth);
+                lane = pick < leftWidth ? -8.65f + pick : rightStart + pick - leftWidth;
+            }
+            if (id >= PerDirectionCount) lane = -lane;
             return new Vehicle { Distance = distance, Lateral = lane, Visible = true,
                 LowerLimit = Mathf.Min(RearLimit, distance - 200f),
                 UpperLimit = Mathf.Max(drawDistance + 180f, distance + 200f) };
@@ -175,16 +209,18 @@ namespace HighwaySurfing
 
         void Recycle(int id, ref Vehicle vehicle, bool toFront)
         {
-            int start = id < 9 ? 0 : 9;
+            int start = id < PerDirectionCount ? 0 : PerDirectionCount;
             float edge = toFront ? drawDistance + 80f : RearLimit;
-            for (int i = start; i < start + 9; i++)
+            for (int i = start; i < start + PerDirectionCount; i++)
             {
                 if (i == id) continue;
                 edge = toFront ? Mathf.Max(edge, vehicles[i].Distance) : Mathf.Min(edge, vehicles[i].Distance);
             }
-            float position = edge + (toFront ? 1 : -1) * (150f + Next01() * 45f);
+            float position = edge + (toFront ? 1 : -1) * NextHeadway();
             vehicle = MakeVehicle(id, position);
         }
+
+        float NextHeadway() => MinimumHeadway + Next01() * (dense ? 20 : 45);
 
         float Next01()
         {

@@ -36,6 +36,9 @@ namespace HighwaySurfing
         public bool CollisionSlowdownEnabled = true;
         [Tooltip("Percentage of the current speed lost on contact. 30 means 138 km/h becomes 96.6 km/h. No automatic speed recovery; accelerate to regain speed.")]
         [Range(0, 100)] public float CollisionSpeedLossPercent = 30;
+        [Header("Traffic")]
+        [Tooltip("More frequent traffic, with a passable width and enough steering time. Off restores the original traffic spacing. Low steering speed automatically increases spacing.")]
+        public bool DenseTraffic = true;
         [Header("World")]
         public int Seed = 47;
         public float StartingDistance = 2200;
@@ -49,6 +52,8 @@ namespace HighwaySurfing
         public bool AttractDemoActive { get; set; }
         public float AttractDemoSpeedKmh { get; set; } = 138;
         public float AttractDemoSteering { get; set; }
+        public float TrafficSteeringScale { get; set; } = 1;
+        public float TrafficInputSmoothingSeconds { get; set; }
         public bool MotionActive => !Paused && Time.timeScale > 0 &&
             (!UseExternalSteering || ExternalRideReady || AttractDemoActive);
         public int RideRevision { get; private set; }
@@ -67,7 +72,8 @@ namespace HighwaySurfing
         public const int TrafficCount = HighwayTraffic.Count;
         private HighwayTraffic traffic;
         private int trafficSeed;
-        private float trafficDrawDistance, initialSpeed = 138;
+        private float trafficDrawDistance, trafficLateralSpeed, trafficSmoothing, initialSpeed = 138;
+        private bool trafficDense;
         private Func<float, bool> trafficSuppression;
 
         private readonly MeshBatch surfaces = new MeshBatch();
@@ -151,7 +157,7 @@ namespace HighwaySurfing
             TravelledMetres = 0; elapsed = 0; LateralPosition = -3.1f; route.Reset();
             CurrentSteering = 0; SteeringInput = 0; bank = 0; Paused = false;
             SpeedKmh = initialSpeed; KeyboardSpeedControl = 0; CollisionCount = 0; RideRevision++;
-            EnsureTraffic(); traffic.Reset(SpeedKmh);
+            EnsureTraffic(); traffic.Reset(SpeedKmh, LateralPosition);
         }
 
         public void ApplySpeedControl(float control, float acceleration, float braking, float dt)
@@ -163,10 +169,15 @@ namespace HighwaySurfing
 
         private void EnsureTraffic()
         {
-            if (traffic != null && trafficSeed == Seed && Mathf.Approximately(trafficDrawDistance, DrawDistance)) return;
-            trafficSeed = Seed; trafficDrawDistance = DrawDistance;
-            traffic = new HighwayTraffic(Seed, DrawDistance);
-            traffic.Reset(SpeedKmh);
+            float availableLateral = LateralSpeed * Mathf.Clamp01(TrafficSteeringScale);
+            if (traffic != null && trafficSeed == Seed && trafficDense == DenseTraffic &&
+                Mathf.Approximately(trafficDrawDistance, DrawDistance) &&
+                Mathf.Approximately(trafficLateralSpeed, availableLateral) &&
+                Mathf.Approximately(trafficSmoothing, TrafficInputSmoothingSeconds)) return;
+            trafficSeed = Seed; trafficDrawDistance = DrawDistance; trafficDense = DenseTraffic;
+            trafficLateralSpeed = availableLateral; trafficSmoothing = TrafficInputSmoothingSeconds;
+            traffic = new HighwayTraffic(Seed, DrawDistance, DenseTraffic, availableLateral, trafficSmoothing, LateralPosition);
+            traffic.Reset(SpeedKmh, LateralPosition);
         }
 
         [ContextMenu("Refresh preview")]

@@ -8,8 +8,7 @@ public static class HighwayTrafficChecks
     {
         int checks = 0;
         // Same-direction cars share a velocity, so their headway survives every speed change.
-        // At maximum closing speed (220 km/h - 24 m/s), 150 m allows 4 seconds;
-        // steering 2.6 m clears any car from any starting point within 0.75 seconds.
+        // Dense traffic still preserves its steering-capacity-based headway through recycling.
         for (int seed = 0; seed < 24; seed++)
         {
             var a = new HighwayTraffic(seed, 1100);
@@ -30,14 +29,14 @@ public static class HighwayTrafficChecks
                     bool av = a.Sample(i, out float ad, out float al, out float ar);
                     bool bv = b.Sample(i, out float bd, out float bl, out float br);
                     Check(av == bv && ad == bd && al == bl && ar == br, "Deterministic state");
-                    if (i < 9)
+                    if (i < HighwayTraffic.PerDirectionCount)
                     {
                         Check(al >= -8.65f && al <= -2.35f, "Traffic stays on carriageway");
                         if (Mathf.Abs(al + 5.3f) < HighwayTraffic.VehicleHalfWidth + HighwayTraffic.PlayerRadius) centre = true;
-                        for (int j = i + 1; j < 9; j++)
+                        for (int j = i + 1; j < HighwayTraffic.PerDirectionCount; j++)
                         {
                             a.Sample(j, out float other, out _, out _);
-                            Check(Mathf.Abs(ad - other) >= 149.9f, "Headway survived changes and recycling");
+                            Check(Mathf.Abs(ad - other) >= a.MinimumHeadway - .1f, "Headway survived changes and recycling");
                         }
                     }
                 }
@@ -133,7 +132,7 @@ public static class HighwayTrafficChecks
         for (int frame = 0; frame < 3000 && rearId < 0; frame++)
         {
             traffic.Step(.1f, 0, -5.3f, -5.3f, 0, true);
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < HighwayTraffic.PerDirectionCount; i++)
             {
                 traffic.Sample(i, out float d, out _, out _);
                 if (d < -180 && d > -400) { rearId = i; break; }

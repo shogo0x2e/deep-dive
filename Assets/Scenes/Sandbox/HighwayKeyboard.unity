@@ -1297,6 +1297,7 @@ MonoBehaviour:
   ExternalRideReady: 0
   CollisionSlowdownEnabled: 1
   CollisionSpeedLossPercent: 30
+  DenseTraffic: 1
   Seed: 47
   StartingDistance: 2200
   DrawDistance: 1100

@@ -20,7 +20,7 @@ namespace HighwaySurfing
                 if (d < -70 || d > DrawDistance) continue;
 
                 float at = s + d;
-                bool opposite = i >= 9;
+                bool opposite = i >= HighwayTraffic.PerDirectionCount;
                 float facing = opposite ? -1f : 1f;
                 Vector3 roadForward = (Center(at + 1) - Center(at - 1)).normalized;
                 Vector3 roadRight = Tangent(at);
