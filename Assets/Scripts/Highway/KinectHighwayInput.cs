@@ -22,8 +22,14 @@ namespace HighwaySurfing
         [Range(0,.6f)] public float PoseLossGraceSeconds = .3f;
         [Tooltip("A new coarse instruction must persist this long before the modal changes.")]
         [Range(.2f,1)] public float GuidanceChangeDelaySeconds = .45f;
-        [Range(1,10)] public float DepartureGraceSeconds = 3;
-        [Range(.5f,5)] public float PoseReleaseSeconds = 1.5f;
+        [Header("Leaving the ride")]
+        [Tooltip("Continuous absence of the registered person before returning to the tutorial. Brief tracking loss does not release the rider.")]
+        [Range(1,15)] public float DepartureGraceSeconds = 6;
+        [Tooltip("Optional: also end a ride after a continuously observed lowered/folded arm pose. Off keeps riding while the person is still present.")]
+        public bool ReleaseOnPoseLoss = false;
+        [Tooltip("Only used when Release On Pose Loss is enabled. Uncertain/missing joints do not count toward this timer.")]
+        [Range(.5f,15)] public float PoseReleaseSeconds = 5;
+        [Header("Steering")]
         [Range(.25f,2)] public float Sensitivity = 1;
         public bool InvertSteering;
         [NonSerialized] public bool AllowSimulationForTesting;
@@ -97,13 +103,13 @@ namespace HighwaySurfing
         }
         void UpdateRidePose()
         {
-            if (!RideRegistered || !Rig.SelectedBodyPresent) { poseLostSince = -1; return; }
+            if (!ReleaseOnPoseLoss || !RideRegistered || !Rig.SelectedBodyPresent) { poseLostSince = -1; return; }
             bool known = Rig.TryGetRidingPose(out bool riding);
-            if (known && riding) { poseLostSince = -1; return; }
+            // Only a continuously observed released pose is evidence of deliberate departure.
+            // An occluded arm or uncertain chest must not end an otherwise present rider's turn.
+            if (!known || riding) { poseLostSince = -1; return; }
             if (poseLostSince < 0) poseLostSince = Time.unscaledTime;
-            // Brief occlusion is allowed longer than deliberately lowering/folding the arms.
-            float grace = known ? PoseReleaseSeconds : DepartureGraceSeconds;
-            if (Time.unscaledTime - poseLostSince >= grace) { ReleasePerson(); World.ResetRide(); }
+            if (Time.unscaledTime - poseLostSince >= PoseReleaseSeconds) { ReleasePerson(); World.ResetRide(); }
         }
         void UpdateTutorialGuidance()
         {
