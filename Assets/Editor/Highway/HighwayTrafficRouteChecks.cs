@@ -13,11 +13,14 @@ public static class HighwayTrafficRouteChecks
         var rider = new HighwayRouteState();
         var routes = new HighwayTrafficRoutes(4);
         routes.Reset(0, rider, first + 100);
+        check(routes.FollowsItinerary(0,rider),"fresh car follows current itinerary");
         Vector3 oldCar = routes.Sample(0, first + 100).Position;
         rider.Advance(first, -8);
+        check(!routes.FollowsItinerary(0,rider),"new exit marks previous motorway for offscreen retirement");
         check(Vector3.Distance(oldCar, routes.Sample(0, first + 100).Position) < .001f, "rider exit cannot move old car");
         check(Vector3.Distance(routes.Sample(0, second + 100).Position, Vector3.forward * (second + 100)) < .001f, "undecided future branches stay on mainline");
         routes.Reset(1, rider, first + 100);
+        check(routes.FollowsItinerary(1,rider),"replacement adopts rider itinerary");
         for (float d = 0; d < length + 50; d += 31)
         {
             var actual = routes.Sample(1, first + d); var expected = rider.Sample(first + d);
@@ -29,6 +32,7 @@ public static class HighwayTrafficRouteChecks
         routes.Reset(1, rider, second + 50);
         check(Vector3.Distance(routes.Sample(1, second + 50).Position, rider.Sample(second + 50).Position) < .002f, "recycle rebases to new itinerary");
         routes.Reset(2, rider, second + length / 2, true);
+        check(routes.FollowsItinerary(2,rider),"new opposite motorway traffic is not repeatedly retired on a ramp");
         check(routes.IsOnConnector(1, second + length / 2) && !routes.IsOnConnector(2, second + length / 2), "only same-direction car uses connector");
         var crossing = rider.Crossing(1, -length / 2);
         check(Vector3.Distance(routes.Sample(2, second + length / 2).Position, crossing.Position) < .002f, "opposite connector spawn projects onto destination motorway");

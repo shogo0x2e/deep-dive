@@ -50,7 +50,7 @@
 
 Mainの `NightHighway` → **Night Highway World > Collision Gameplay** で `Collision Slowdown Enabled` をON/OFFできます。初期値はON、`Collision Speed Loss Percent` は30（138 → 96.6 km/h）。OFFにしても衝突の画面効果と音は残ります。減速後は腕のアクセル操作で再加速でき、Rや参加者の再登録では開始速度へ戻ります。Play中に切り替えられますが、設定を保持するときは停止後に変更してシーンを保存します。
 
-**Traffic > Dense Traffic** は初期ONで、通常設定の交通密度を従来の約1.7倍にしています。OFFで従来の車間へ戻せます。出現時には反応距離を確保し、上限速度が高い／Kinectの感度や横移動速度が低い場合は出現時の車間を広げます。車ごとの速度差で横並びになることがあるため、ブレーキも使って車間を取ります。車は分岐・合流で消さず、各車の道路を保持して走り続けます。視界外で再配置し、遠景では車体とライトをフェードさせます。配置と検証の詳細は [HighwayKeyboard.md](HighwayKeyboard.md) を参照してください。
+**Traffic > Dense Traffic** は初期ONで、通常設定の交通密度を従来の約1.7倍にしています。OFFで従来の車間へ戻せます。速度上限・現在速度を上げても交通密度は変えません。Kinectの感度や横移動速度が低い場合だけ出現時の車間を広げます。車ごとの速度差で横並びになることがあるため、ブレーキも使って車間を取ります。車は分岐・合流で消さず、各車の道路を保持して走り続けます。視界外で再配置し、遠景では車体とライトをフェードさせます。配置と検証の詳細は [HighwayKeyboard.md](HighwayKeyboard.md) を参照してください。
 
 2026-10-31の衝突音修正では、鈍い低音を強め、衝突時だけ駆動音・通過音を短く下げます。`NightHighway` → **Highway Impact Feedback** の `Impact Volume` は初期0.85、`Duck Ride Sound` で一時的な走行音の減衰をON/OFFできます。
 

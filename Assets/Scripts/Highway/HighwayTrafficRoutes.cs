@@ -82,6 +82,16 @@ namespace HighwaySurfing
             return new HighwayRouteState.Frame { Position = entry.Position + entry.Forward * distance, Forward = entry.Forward };
         }
 
+        /// <summary>Cars created before a new exit keep their old road until out of view.</summary>
+        public bool FollowsItinerary(int id, HighwayRouteState rider)
+        {
+            Itinerary route = Get(id);
+            if (!route.Initialized) return false;
+            for (int i = 0; i < rider.Decisions; i++)
+                if ((i < route.Exits.Count && route.Exits[i]) != rider.TookExit(i)) return false;
+            return true;
+        }
+
         /// <summary>Whether this car's frozen itinerary is on a one-way connector.</summary>
         public bool IsOnConnector(int id, float absoluteTravel)
         {

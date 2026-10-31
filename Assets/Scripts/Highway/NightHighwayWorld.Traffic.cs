@@ -4,6 +4,23 @@ namespace HighwaySurfing
 {
     public sealed partial class NightHighwayWorld
     {
+        private readonly bool[] trafficOutsideAtFrameStart = new bool[TrafficCount];
+
+        private bool TrafficOutsideView(Vector3 point)
+        {
+            Vector3 p = TrafficViewPoint(point);
+            return p.z < -100 || p.sqrMagnitude > (DrawDistance + 100) * (DrawDistance + 100);
+        }
+
+        private void CaptureTrafficVisibilityForFrame()
+        {
+            for (int i = 0; i < TrafficCount; i++)
+            {
+                traffic.Sample(i, out float d, out _, out _);
+                trafficOutsideAtFrameStart[i] = TrafficOutsideView(trafficRoutes.Sample(i, (float)TravelledMetres + d).Position);
+            }
+        }
+
         private void SyncTrafficRoutes()
         {
             for (int i = 0; i < TrafficCount; i++)
@@ -36,25 +53,45 @@ namespace HighwaySurfing
         private bool CanRecycleTraffic(int index, float distance)
         {
             var frame = trafficRoutes.Sample(index, (float)TravelledMetres + distance);
-            Vector3 p = TrafficViewPoint(frame.Position);
             // A longitudinal wrap alone is insufficient on a curved ramp: the old mainline
             // may still be in view. Retain the car until it is behind or beyond the far fade.
-            return p.z < -100 || p.sqrMagnitude > (DrawDistance + 100) * (DrawDistance + 100);
+            // A car seen in the preceding rendered frame cannot be retired mid-frame
+            // while a fast turn momentarily puts it behind the camera.
+            return trafficOutsideAtFrameStart[index] && TrafficOutsideView(frame.Position);
         }
 
         private float PlaceRecycledTraffic(int index, float distance)
         {
             float direction = Mathf.Sign(distance);
-            for (int attempt = 0; attempt < 32; attempt++)
+            // Refill the nearest free offscreen slot. The furthest pooled car may be
+            // kilometres down an abandoned motorway and must not push new traffic away.
+            distance = direction > 0 ? DrawDistance + 125 : -Mathf.Max(180, traffic.RevealClearance + 80);
+            float gap = traffic.MinimumHeadway + 5;
+            for (int attempt = 0; attempt < TrafficCount + 64; attempt++)
             {
                 float at = (float)TravelledMetres + distance;
-                trafficRoutes.Reset(index, route, at, index >= HighwayTraffic.PerDirectionCount);
-                Vector3 p = TrafficViewPoint(trafficRoutes.Sample(index, at).Position);
-                if (p.z < -Mathf.Max(150, traffic.RevealClearance) ||
-                    p.sqrMagnitude > (DrawDistance + 100) * (DrawDistance + 100)) return distance;
-                distance += direction * Mathf.Max(300, DrawDistance);
+                trafficRoutes.Reset(TrafficCount, route, at, index >= HighwayTraffic.PerDirectionCount);
+                Vector3 point = trafficRoutes.Sample(TrafficCount, at).Position;
+                Vector3 p = TrafficViewPoint(point);
+                bool outside = p.z < -Mathf.Max(150, traffic.RevealClearance) ||
+                    p.sqrMagnitude > (DrawDistance + 100) * (DrawDistance + 100);
+                bool clear = outside;
+                int first = index < HighwayTraffic.PerDirectionCount ? 0 : HighwayTraffic.PerDirectionCount;
+                for (int other = first; clear && other < first + HighwayTraffic.PerDirectionCount; other++)
+                {
+                    if (other == index) continue;
+                    traffic.Sample(other, out float d, out _, out _);
+                    Vector3 occupied = trafficRoutes.Sample(other, (float)TravelledMetres + d).Position;
+                    clear = (occupied - point).sqrMagnitude >= gap * gap;
+                }
+                if (clear)
+                {
+                    trafficRoutes.Reset(index, route, at, index >= HighwayTraffic.PerDirectionCount);
+                    return distance;
+                }
+                distance += direction * gap;
             }
-            return distance;
+            return float.NaN; // No verified offscreen slot yet: retain the existing car.
         }
 
         /// <summary>World-space traffic point for continuity checks and presentation.</summary>

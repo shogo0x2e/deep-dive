@@ -29,6 +29,7 @@ namespace HighwaySurfing
         public const float MinimumVehicleSpeedKmh = 80f;
         public const float MaximumVehicleSpeedKmh = 120f;
         public const float MaximumSupportedPlayerSpeedKmh = 10000f;
+        const float SpawnReferencePlayerSpeedKmh = 220f;
 
         struct Vehicle
         {
@@ -47,6 +48,8 @@ namespace HighwaySurfing
         public float ClearCorridorCentre { get; private set; }
         public float RevealClearance => Mathf.Max(110, MinimumHeadway + ContactHalfLength);
         public Func<int, float, bool> CanRecycle { get; set; }
+        public Func<int, bool> LeftRiderItinerary { get; set; }
+        /// <summary>Choose an offscreen position, or return NaN to defer recycling.</summary>
         public Func<int, float, float> PlaceRecycledVehicle { get; set; }
         public Func<int, bool> CollisionAllowed { get; set; }
         public int Revision(int index) => vehicles[index].Revision;
@@ -76,10 +79,10 @@ namespace HighwaySurfing
             this.dense = dense;
             this.maximumPlayerSpeedKmh = Mathf.Clamp(maximumPlayerSpeedKmh, 1, MaximumSupportedPlayerSpeedKmh);
             ClearCorridorCentre = Mathf.Clamp(clearCorridorCentre, -9.5f, -1.5f);
-            // Allow time to react to newly spawned traffic. Independent constant speeds can
-            // close these gaps later: the player may need to brake behind a group of cars.
+            // Size gaps using a fixed reference speed, so changing the speed limit does not
+            // change traffic density. Faster travel and closing gaps may require braking.
             // Include reaction, both steering filters (including reversal) and 50 ms frames.
-            float closingSpeed = Mathf.Max(this.maximumPlayerSpeedKmh - MinimumVehicleSpeedKmh, MaximumVehicleSpeedKmh) / 3.6f;
+            float closingSpeed = Mathf.Max(SpawnReferencePlayerSpeedKmh - MinimumVehicleSpeedKmh, MaximumVehicleSpeedKmh) / 3.6f;
             float manoeuvreSeconds = ReactionSeconds + 2 * (1f / 9 + Mathf.Max(0, inputSmoothingSeconds)) + .1f +
                 2 * SafeLateralClearance / Mathf.Max(.01f, lateralSpeed);
             float safeGap = Mathf.Ceil((2 * ContactHalfLength + closingSpeed * manoeuvreSeconds) / 5) * 5;
@@ -153,8 +156,9 @@ namespace HighwaySurfing
                 vehicle.Distance += delta;
                 bool recycled = (delta < 0 && vehicle.Distance < vehicle.LowerLimit) ||
                     (delta > 0 && vehicle.Distance > vehicle.UpperLimit);
+                recycled |= LeftRiderItinerary != null && LeftRiderItinerary(i);
                 recycled = recycled && (CanRecycle == null || CanRecycle(i, vehicle.Distance));
-                if (recycled) Recycle(i, ref vehicle, delta < 0);
+                if (recycled) recycled = Recycle(i, ref vehicle, delta < 0);
                 bool wasVisible = vehicle.Visible;
                 bool routeAllows = suppressAhead == null || !suppressAhead(vehicle.Distance);
                 // Cars hidden on a ramp cannot suddenly reappear just in front of the rider.
@@ -230,7 +234,7 @@ namespace HighwaySurfing
                 UpperLimit = Mathf.Max(drawDistance + 180f, distance + 200f) };
         }
 
-        void Recycle(int id, ref Vehicle vehicle, bool toFront)
+        bool Recycle(int id, ref Vehicle vehicle, bool toFront)
         {
             int start = id < PerDirectionCount ? 0 : PerDirectionCount;
             float edge = toFront ? drawDistance + 80f : RearLimit;
@@ -241,7 +245,9 @@ namespace HighwaySurfing
             }
             float position = edge + (toFront ? 1 : -1) * NextHeadway();
             if (PlaceRecycledVehicle != null) position = PlaceRecycledVehicle(id, position);
+            if (float.IsNaN(position) || float.IsInfinity(position)) return false;
             vehicle = MakeVehicle(id, position);
+            return true;
         }
 
         float NextHeadway() => MinimumHeadway + Next01() * (dense ? 20 : 45);

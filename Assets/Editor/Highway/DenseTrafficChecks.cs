@@ -8,6 +8,7 @@ public static class DenseTrafficChecks
     public static string Run()
     {
         int paths=0, denseVisible=0, classicVisible=0;
+        CheckSpeedCapIndependentLayout();
         // Independent integration through max/zero/matching/variable player speeds and
         // recycling. Ongoing gaps may close; braking is part of normal traffic gameplay.
         foreach(float limit in new[]{220f,400f})
@@ -80,8 +81,77 @@ public static class DenseTrafficChecks
                 Check(!traffic.Sample(0,out _,out _,out _),"near ramp traffic remains hidden");
             }
         }
-        return "PASS: "+paths+" traffic runs at 220/400 km/h with braking, recycling and fixed vehicle speeds; visible density x"+
+        return "PASS: "+paths+" traffic runs at 220/400 km/h with braking, recycling and fixed vehicle speeds; speed-cap-independent layouts; visible density x"+
             ((float)denseVisible/classicVisible).ToString("F2")+"; slow/zero-steer corridors and ramp reveals safe.";
+    }
+
+    static void CheckSpeedCapIndependentLayout()
+    {
+        float[] limits={220f,400f,500f,600f,1000f,10000f};
+        foreach(float capacity in new[]{3.5f,.875f,0f})
+        foreach(float smoothing in new[]{.08f,.3f})
+        foreach(float draw in new[]{500f,1100f})
+        for(int seed=0;seed<3;seed++)
+        {
+            var traffic=new HighwayTraffic[limits.Length];
+            for(int n=0;n<limits.Length;n++)
+            {
+                traffic[n]=new HighwayTraffic(seed,draw,true,capacity,smoothing,-3.1f,limits[n]);
+                if(capacity==3.5f && smoothing==.08f)
+                    Check(traffic[n].MinimumHeadway==90f,"normal headway remains 90 at every speed cap");
+                for(int i=0;i<HighwayTraffic.Count;i++)
+                {
+                    traffic[n].Sample(i,out _,out _,out float speed);
+                    Check(Mathf.Abs(speed)*3.6f>=80f-.001f && Mathf.Abs(speed)*3.6f<=120f+.001f,
+                        "assigned vehicle speed is 80-120 km/h");
+                }
+            }
+            CheckSameLayout(traffic,"initial layout independent of speed cap");
+            for(int frame=0;frame<1200;frame++)
+            {
+                const float dt=.05f, speed=220f;
+                for(int n=0;n<traffic.Length;n++)
+                    traffic[n].Step(dt,speed/3.6f*dt,-3.1f,-3.1f,speed,true,maximumLateralSpeed:capacity);
+                if(frame==599)
+                {
+                    for(int n=0;n<traffic.Length;n++)
+                    {
+                        var distances=new float[HighwayTraffic.Count];
+                        var lanes=new float[HighwayTraffic.Count];
+                        var speeds=new float[HighwayTraffic.Count];
+                        for(int i=0;i<HighwayTraffic.Count;i++)
+                            traffic[n].Sample(i,out distances[i],out lanes[i],out speeds[i]);
+                        traffic[n].Configure(draw,true,capacity,smoothing,-3.1f,limits[(n+1)%limits.Length]);
+                        for(int i=0;i<HighwayTraffic.Count;i++)
+                        {
+                            traffic[n].Sample(i,out float d,out float lane,out float relative);
+                            Check(d==distances[i] && lane==lanes[i] && relative==speeds[i],"Configure preserves existing positions and speeds");
+                        }
+                    }
+                    CheckSameLayout(traffic,"layout after reconfiguration independent of speed cap");
+                }
+            }
+            bool recycled=false;
+            for(int i=0;i<HighwayTraffic.Count;i++)if(traffic[0].Revision(i)>1)recycled=true;
+            Check(recycled,"speed-cap comparison covers recycling");
+            CheckSameLayout(traffic,"recycled layout independent of speed cap");
+        }
+    }
+
+    static void CheckSameLayout(HighwayTraffic[] traffic,string name)
+    {
+        for(int n=1;n<traffic.Length;n++)
+        {
+            Check(traffic[n].MinimumHeadway==traffic[0].MinimumHeadway &&
+                traffic[n].UsesFixedClearCorridor==traffic[0].UsesFixedClearCorridor,name);
+            for(int i=0;i<HighwayTraffic.Count;i++)
+            {
+                bool visible=traffic[0].Sample(i,out float d,out float lane,out float speed);
+                bool otherVisible=traffic[n].Sample(i,out float otherD,out float otherLane,out float otherSpeed);
+                Check(visible==otherVisible && d==otherD && lane==otherLane && speed==otherSpeed &&
+                    traffic[0].Revision(i)==traffic[n].Revision(i),name);
+            }
+        }
     }
     static void Check(bool ok,string name){if(!ok)throw new Exception(name);}
 }

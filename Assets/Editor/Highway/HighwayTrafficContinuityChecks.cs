@@ -31,6 +31,8 @@ public static class HighwayTrafficContinuityChecks
                     const float dt=.05f;
                     float lane=((choices>>route.Decisions)&1)==0?-8:-3;
                     world.LateralPosition=lane;
+                    var previousRider=route.Sample((float)world.TravelledMetres);
+                    Vector3 previousForward=previousRider.Forward;previousForward.y=0;previousForward.Normalize();
                     advance.Invoke(world,new object[]{dt});
                     var rider=route.Sample((float)world.TravelledMetres);
                     Vector3 forward=rider.Forward;forward.y=0;forward.Normalize();
@@ -41,8 +43,8 @@ public static class HighwayTrafficContinuityChecks
                             Check(Vector3.Distance(point,positions[i])<3,"rider junction choice cannot teleport existing car");
                         else
                         {
-                            Vector3 old=positions[i]-rider.Position, fresh=point-rider.Position;
-                            Check(Vector3.Dot(old,forward)<-70 || old.magnitude>world.DrawDistance+60,"old vehicle leaves view before recycle");
+                            Vector3 old=positions[i]-previousRider.Position, fresh=point-rider.Position;
+                            Check(Vector3.Dot(old,previousForward)<-85 || old.magnitude>world.DrawDistance+80,"old vehicle leaves view before recycle");
                             // A high-speed frame can approach a fresh distant spawn after its
                             // substep; it remains in the zero/near-zero far-fade region.
                             Check(Vector3.Dot(fresh,forward)<-100 || fresh.magnitude>world.DrawDistance-60,"new vehicle starts outside view or in far fade");

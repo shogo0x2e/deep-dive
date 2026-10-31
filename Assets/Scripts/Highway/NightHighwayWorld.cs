@@ -74,7 +74,8 @@ namespace HighwaySurfing
         private int trafficSeed;
         private float trafficDrawDistance, trafficLateralSpeed, trafficSmoothing, trafficSpeedLimit, initialSpeed = 138;
         private bool trafficDense;
-        private readonly HighwayTrafficRoutes trafficRoutes = new HighwayTrafficRoutes(TrafficCount);
+        // One scratch itinerary lets spawn search fail without changing the existing car's road.
+        private readonly HighwayTrafficRoutes trafficRoutes = new HighwayTrafficRoutes(TrafficCount + 1);
         private readonly int[] trafficRouteRevisions = new int[TrafficCount];
 
         private readonly MeshBatch surfaces = new MeshBatch { Opacity = 1 };
@@ -132,6 +133,7 @@ namespace HighwaySurfing
         private void AdvanceRide(float dt)
         {
             EnsureTraffic();
+            CaptureTrafficVisibilityForFrame();
             // At 10,000 km/h a 50 ms frame travels 139 m. Keep junction decisions and
             // swept contacts on short road segments; render only once after all movement.
             float remaining = dt;
@@ -194,6 +196,7 @@ namespace HighwaySurfing
             {
                 traffic = new HighwayTraffic(Seed, DrawDistance, DenseTraffic, availableLateral, trafficSmoothing, LateralPosition, trafficSpeedLimit);
                 traffic.CanRecycle = CanRecycleTraffic;
+                traffic.LeftRiderItinerary = index => !trafficRoutes.FollowsItinerary(index, route);
                 traffic.PlaceRecycledVehicle = PlaceRecycledTraffic;
                 traffic.CollisionAllowed = CanTrafficCollide;
                 Array.Clear(trafficRouteRevisions, 0, TrafficCount);
