@@ -49,8 +49,9 @@ namespace HighwaySurfing.Kinect
         // The ride adapter selects this profile; the standalone skeleton Sandbox stays strict.
         public bool RelaxedStartPose { get; set; }
         public KinectPresenceArea EntryArea { get; set; }
-        public bool SelectedBodyInEntryArea => SelectedBodyPresent &&
-            (!EntryArea.Enabled || (Joints[0] != null && EntryArea.Contains(Joints[0].localPosition)));
+        public bool SelectedBodyInEntryArea => SelectedBodyInArea(0);
+        public bool SelectedBodyInArea(float extraMarginMetres) => SelectedBodyPresent &&
+            (!EntryArea.Enabled || (Joints[0] != null && EntryArea.Contains(Joints[0].localPosition, extraMarginMetres)));
         // Presence does not require raised arms or a calibrated chest, and considers all bodies.
         public bool HasPersonInEntryArea
         {

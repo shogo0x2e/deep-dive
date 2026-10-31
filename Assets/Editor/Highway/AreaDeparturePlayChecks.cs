@@ -29,7 +29,9 @@ public static class AreaDeparturePlayChecks
             throw new Exception("Play Main with Auto Start Kinect temporarily OFF; one explicit simulation at a time.");
         rig=input.Rig;attract=input.GetComponent<HighwayAttractMode>();view=UnityEngine.Object.FindFirstObjectByType<SurfTutorialView>();
         report.Clear();
-        Check(input.ReleaseOutsideEntryArea && input.DepartureGraceSeconds==3 && !input.ReleaseOnPoseLoss,"saved Main uses area departure, three-second grace, no arm-pose exit");
+        Check(input.ReleaseOutsideEntryArea && input.DepartureGraceSeconds==3 && !input.ReleaseOnPoseLoss &&
+            !input.PauseDuringDepartureGrace && Mathf.Approximately(input.DepartureAreaMarginMetres,.3f),
+            "saved Main keeps three-second grace, thirty-centimetre departure margin, no immediate pause");
         input.AllowSimulationForTesting=true;rig.UseSimulation();input.ReleasePerson();
         sensorInverse=(Matrix4x4)simulationFrame.GetValue(rig);attract.IdleSeconds=20;input.World.ResetRide();
         running=true;Next(0);EditorApplication.update+=Tick;EditorApplication.playModeStateChanged+=OnPlayModeChanged;
@@ -51,16 +53,18 @@ public static class AreaDeparturePlayChecks
                 case 1:
                     if(age<1)return;
                     Check(input.RideRegistered && input.RegisteredPersonPresent,"arms down inside the area keeps the same ride");
-                    revision=input.World.RideRevision;Move(true);Next(2);break;
+                    revision=input.World.RideRevision;
+                    simulationFrame.SetValue(rig,Matrix4x4.Translate(new Vector3(1.65f,0,0))*sensorInverse);
+                    Next(10);break;
                 case 2:
                     if(age<.2)return;
                     Check(rig.IsTracked && rig.SelectedBodyPresent && !input.RegisteredPersonPresent,"tracked body outside ROI counts as absent from play area");
                     Check(input.RideRegistered && !input.ShowTutorial,"brief exit retains registration without flashing modal");
-                    Check(!input.InputAvailable && !input.World.MotionActive,"leaving ROI immediately pauses steering and forward motion");
+                    Check(input.InputAvailable && input.World.MotionActive,"leaving the departure area keeps steering and forward motion during grace");
                     distance=input.World.TravelledMetres;Next(3);break;
                 case 3:
                     if(age<.6)return;
-                    Check(input.World.TravelledMetres==distance,"road stays stopped during departure grace");
+                    Check(input.World.TravelledMetres>distance,"road continues during departure grace");
                     Move(false);Next(4);break;
                 case 4:
                     if(age<.3)return;
@@ -85,6 +89,15 @@ public static class AreaDeparturePlayChecks
                 case 9:
                     if(age<3.3)return;
                     Check(input.RideRegistered && input.World.MotionActive,"Inspector OFF preserves sensor-presence departure behavior");
+                    input.ReleaseOutsideEntryArea=true;input.PauseDuringDepartureGrace=true;Next(11);break;
+                case 10:
+                    if(age<3.3)return;
+                    Check(!rig.SelectedBodyInEntryArea && input.RegisteredPersonPresent,"slight exit from entry area remains inside wider departure area");
+                    Check(input.RideRegistered && input.InputAvailable && input.World.MotionActive,"boundary margin permits sustained steering without a pause or release");
+                    Move(true);Next(2);break;
+                case 11:
+                    if(age<.2)return;
+                    Check(input.RideRegistered && !input.World.MotionActive && !input.InputAvailable,"optional immediate pause remains configurable");
                     Finish("PASS: "+report.Count+" area-departure play checks");break;
             }
         }
@@ -94,7 +107,7 @@ public static class AreaDeparturePlayChecks
     static void Finish(string result)
     {
         running=false;EditorApplication.update-=Tick;EditorApplication.playModeStateChanged-=OnPlayModeChanged;
-        Move(false);input.ReleaseOutsideEntryArea=true;attract.IdleSeconds=5;
+        Move(false);input.ReleaseOutsideEntryArea=true;input.PauseDuringDepartureGrace=false;attract.IdleSeconds=5;
         Directory.CreateDirectory(".Local/Review");File.WriteAllText(".Local/Review/area-departure-trial.txt",result+"\n"+string.Join("\n",report));
         if(result.StartsWith("FAIL"))Debug.LogError(result);else Debug.Log(result);
     }

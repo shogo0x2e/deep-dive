@@ -9818,6 +9818,8 @@ MonoBehaviour:
   PoseLossGraceSeconds: 0.3
   GuidanceChangeDelaySeconds: 0.45
   ReleaseOutsideEntryArea: 1
+  DepartureAreaMarginMetres: 0.3
+  PauseDuringDepartureGrace: 0
   DepartureGraceSeconds: 3
   ReleaseOnPoseLoss: 0
   PoseReleaseSeconds: 5

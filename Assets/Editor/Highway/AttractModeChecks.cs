@@ -10,6 +10,9 @@ public static class AttractModeChecks
         var area = new KinectPresenceArea { Enabled=true, DepthMetres=new Vector2(.5f,3.5f), HalfWidthMetres=1.5f };
         Check(area.Contains(new Vector3(0, -.2f, 2)), "pelvis inside ROI"); count++;
         Check(area.Contains(new Vector3(-1.5f, .5f, .5f)) && area.Contains(new Vector3(1.5f, 0, 3.5f)), "ROI edges included"); count++;
+        Check(!area.Contains(new Vector3(1.65f,0,2)) && area.Contains(new Vector3(1.65f,0,2),.3f), "departure margin does not widen entry area"); count++;
+        Check(area.Contains(new Vector3(0,0,3.7f),.3f) && area.Contains(new Vector3(0,0,.3f),.3f), "departure margin covers front and rear edges"); count++;
+        Check(!area.Contains(new Vector3(1.9f,0,2),.3f) && !area.Contains(new Vector3(0,0,3.9f),.3f), "clear departure remains outside margin"); count++;
         foreach(var p in new[]{new Vector3(1.51f,0,2),new Vector3(-1.51f,0,2),new Vector3(0,0,.49f),new Vector3(0,0,3.51f),new Vector3(float.NaN,0,2)})
         { Check(!area.Contains(p), "outside/invalid pelvis rejected"); count++; }
         area.Enabled=false;

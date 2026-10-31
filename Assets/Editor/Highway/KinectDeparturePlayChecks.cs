@@ -86,7 +86,7 @@ public static class KinectDeparturePlayChecks
                     if(age<1.2)return;
                     Check(input.RideRegistered && !input.ShowTutorial,"brief body dropout retains registration and hides modal");
                     Check(!input.InputAvailable && input.World.SteeringInput==0,"missing body cannot steer");
-                    Check(!input.World.MotionActive,"missing person pauses forward motion during grace");
+                    Check(!input.World.MotionActive,"disconnected source pauses motion while retaining registration");
                     Presence(true);Next(8);break;
                 case 8:
                     if(age<.3)return;
