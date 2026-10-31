@@ -10,8 +10,9 @@ namespace HighwaySurfing.Kinect
             public uint Id;
             public float DepthMeters;
             public int Confidence;
-            public Candidate(uint id, float depth, int confidence = 2)
-            { Id = id; DepthMeters = depth; Confidence = confidence; }
+            public bool Eligible;
+            public Candidate(uint id, float depth, int confidence = 2, bool eligible = true)
+            { Id = id; DepthMeters = depth; Confidence = confidence; Eligible = eligible; }
         }
 
         public bool HasSelection { get; private set; }
@@ -36,8 +37,8 @@ namespace HighwaySurfing.Kinect
             for (int i = 0; i < count; i++)
             {
                 var body = bodies[i];
-                if (HasSelection && body.Id == SelectedId) current = i;
-                if (!ValidDepth(body.DepthMeters) || body.Confidence < 2) continue;
+                if (HasSelection && body.Id == SelectedId && (body.Eligible || lockSelection)) current = i;
+                if (!body.Eligible || !ValidDepth(body.DepthMeters) || body.Confidence < 2) continue;
                 if (nearest < 0 || body.DepthMeters < bodies[nearest].DepthMeters ||
                     (body.DepthMeters == bodies[nearest].DepthMeters && body.Id < bodies[nearest].Id)) nearest = i;
             }

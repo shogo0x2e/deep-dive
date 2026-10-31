@@ -63,7 +63,7 @@ namespace HighwaySurfing
         {
             return World != null && World.isActiveAndEnabled && World.MainCamera != null &&
                 World.SurfaceMaterial != null && World.GlowMaterial != null && !World.Paused &&
-                Time.timeScale > 0 && (!World.UseExternalSteering || World.ExternalRideReady);
+                Time.timeScale > 0 && !World.AttractDemoActive && (!World.UseExternalSteering || World.ExternalRideReady);
         }
 
         void OnCollision(HighwayHit hit)

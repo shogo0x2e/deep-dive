@@ -77,7 +77,7 @@ namespace HighwaySurfing
             if (identitySet && (!Rig.LockSelectedPerson || Rig.BodyId != registeredId)) ClearRegistration();
             if (identitySet)
             {
-                if (Rig.SelectedBodyPresent) lastPresence=Time.unscaledTime;
+                if (RideRegistered ? Rig.SelectedBodyPresent : Rig.SelectedBodyInEntryArea) lastPresence=Time.unscaledTime;
                 else if (Time.unscaledTime-lastPresence >= DepartureGraceSeconds)
                 { ReleasePerson(); World.ResetRide(); }
             }

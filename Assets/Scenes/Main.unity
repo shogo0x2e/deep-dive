@@ -9787,6 +9787,7 @@ GameObject:
   - component: {fileID: 2111728934}
   - component: {fileID: 2111728933}
   - component: {fileID: 2111728936}
+  - component: {fileID: 2111728937}
   m_Layer: 0
   m_Name: KinectSurfing
   m_TagString: Untagged
@@ -9992,6 +9993,26 @@ MonoBehaviour:
   AccelerationKmhPerSecond: 30
   BrakingKmhPerSecond: 60
   SmoothingSeconds: 0.12
+--- !u!114 &2111728937
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2111728932}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4e814d699ad4473a8b84e35e57d03e1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HighwaySurfing.HighwayAttractMode
+  Input: {fileID: 2111728933}
+  EnableAttractMode: 1
+  IdleSeconds: 5
+  IdleModalOpacity: 0.15
+  PresenceArea:
+    Enabled: 1
+    DepthMetres: {x: 0.5, y: 3.5}
+    HalfWidthMetres: 1.5
 --- !u!1 &2114282086
 GameObject:
   m_ObjectHideFlags: 0

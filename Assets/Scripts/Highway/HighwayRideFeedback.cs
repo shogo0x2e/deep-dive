@@ -152,7 +152,7 @@ namespace HighwaySurfing
                 for (int n = 0; n < trafficObserved.Length; n++) { trafficObserved[n] = false; lastVehicleSound[n] = -10; }
             }
             bool registered = Input != null && Input.KinectMode ? Input.RideRegistered : !World.UseExternalSteering;
-            bool active = !World.Paused && Time.timeScale > 0 && (!World.UseExternalSteering || World.ExternalRideReady);
+            bool active = World.MotionActive;
             impactDuckAge += dt;
             ImpactMixGain = Mathf.SmoothStep(.25f, 1, Mathf.Clamp01((impactDuckAge - .12f) / .30f));
             if (registered && !wasRegistered)

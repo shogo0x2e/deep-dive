@@ -45,6 +45,12 @@ namespace HighwaySurfing
         public double TravelledMetres { get; private set; }
         public float CurrentSteering { get; private set; }
         public float KeyboardSpeedControl { get; private set; }
+        public float DefaultSpeedKmh => initialSpeed;
+        public bool AttractDemoActive { get; set; }
+        public float AttractDemoSpeedKmh { get; set; } = 138;
+        public float AttractDemoSteering { get; set; }
+        public bool MotionActive => !Paused && Time.timeScale > 0 &&
+            (!UseExternalSteering || ExternalRideReady || AttractDemoActive);
         public int RideRevision { get; private set; }
         public int CollisionCount { get; private set; }
         public event Action<HighwayHit> Collided;
@@ -105,15 +111,16 @@ namespace HighwaySurfing
                         ResetRide(); previousDistance = TravelledMetres; previousLateral = LateralPosition;
                     }
                 }
-                bool active = !Paused && Time.timeScale > 0 && (!UseExternalSteering || ExternalRideReady);
-                KeyboardSpeedControl = active && k != null ?
+                bool active = MotionActive;
+                if (AttractDemoActive) SpeedKmh = AttractDemoSpeedKmh;
+                KeyboardSpeedControl = active && !AttractDemoActive && k != null ?
                     ((k.upArrowKey.isPressed || k.wKey.isPressed) ? 1 : 0) -
                     ((k.downArrowKey.isPressed || k.sKey.isPressed) ? 1 : 0) : 0;
                 ApplySpeedControl(KeyboardSpeedControl, KeyboardAccelerationKmhPerSecond, KeyboardBrakingKmhPerSecond, dt);
                 SpeedKmh = Mathf.Clamp(SpeedKmh, 0, 220);
-                float steer = UseExternalSteering ? SteeringInput : k == null ? 0 :
+                float steer = AttractDemoActive ? AttractDemoSteering : UseExternalSteering ? SteeringInput : k == null ? 0 :
                     ((k.rightArrowKey.isPressed || k.dKey.isPressed) ? 1 : 0) - ((k.leftArrowKey.isPressed || k.aKey.isPressed) ? 1 : 0);
-                CurrentSteering = UseExternalSteering && !ExternalSteeringAvailable ? 0 :
+                CurrentSteering = !AttractDemoActive && UseExternalSteering && !ExternalSteeringAvailable ? 0 :
                     Mathf.Lerp(CurrentSteering, Mathf.Clamp(steer, -1, 1), 1 - Mathf.Exp(-dt * 9));
                 if (active)
                 {
@@ -126,7 +133,7 @@ namespace HighwaySurfing
                 EnsureTraffic();
                 var hit = traffic.Step(dt, (float)(TravelledMetres - previousDistance), previousLateral,
                     LateralPosition, SpeedKmh, active, trafficSuppression, LateralSpeed);
-                if (hit.HasValue)
+                if (hit.HasValue && !AttractDemoActive)
                 {
                     // Traffic latches a continuous contact, so this penalty happens once.
                     // Keep the pre-impact relative speed in the event for sound and camera strength.
@@ -149,7 +156,7 @@ namespace HighwaySurfing
 
         public void ApplySpeedControl(float control, float acceleration, float braking, float dt)
         {
-            if (Paused || Time.timeScale <= 0) return;
+            if (Paused || Time.timeScale <= 0 || AttractDemoActive) return;
             SpeedKmh = Mathf.Clamp(SpeedKmh + Mathf.Clamp(control, -1, 1) *
                 (control > 0 ? acceleration : braking) * Mathf.Clamp(dt, 0, .05f), 0, 220);
         }

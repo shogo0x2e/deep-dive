@@ -48,9 +48,32 @@ namespace HighwaySurfing.Kinect
         public bool Calibrating => calibrating;
         // The ride adapter selects this profile; the standalone skeleton Sandbox stays strict.
         public bool RelaxedStartPose { get; set; }
+        public KinectPresenceArea EntryArea { get; set; }
+        public bool SelectedBodyInEntryArea => SelectedBodyPresent &&
+            (!EntryArea.Enabled || (Joints[0] != null && EntryArea.Contains(Joints[0].localPosition)));
+        // Presence does not require raised arms or a calibrated chest, and considers all bodies.
+        public bool HasPersonInEntryArea
+        {
+            get
+            {
+                if (Simulation) return SelectedBodyPresent && PelvisConfidence >= 2 &&
+                    Joints[0] != null && (!EntryArea.Enabled || EntryArea.Contains(Joints[0].localPosition));
+                var frame = capture?.Latest;
+                if (!CaptureActive || frame == null) return false;
+                double age = (System.Diagnostics.Stopwatch.GetTimestamp() - frame.ReceivedTicks) /
+                    (double)System.Diagnostics.Stopwatch.Frequency;
+                if (age > MaximumFrameAge) return false;
+                foreach (var body in frame.Bodies)
+                {
+                    var pelvis = body.Joints[0];
+                    if (pelvis.Confidence >= 2 && EntryArea.Contains(new Vector3(pelvis.X, -pelvis.Y, pelvis.Z) * .001f)) return true;
+                }
+                return false;
+            }
+        }
         public float CalibrationHoldSeconds => RelaxedStartPose ? 1f : 1.5f;
         public bool SelectedBodyPresent => bodyAvailable && float.IsFinite(ResultAgeMs) && ResultAgeMs <= MaximumFrameAge * 1000;
-        public bool SurfPoseReady => IsTracked && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 &&
+        public bool SurfPoseReady => IsTracked && SelectedBodyInEntryArea && confidence[5] >= 1 && confidence[12] >= 1 && confidence[7] >= 1 && confidence[14] >= 1 &&
             SurfPoseDetector.IsOpen(Joints[0].position, Joints[2].position, Joints[5].position, Joints[12].position,
                 Joints[7].position, Joints[14].position, ScreenReference.up, ScreenReference.right, RelaxedStartPose);
         public string CalibrationFeedback { get; private set; } = "";
@@ -263,7 +286,8 @@ namespace HighwaySurfing.Kinect
                     for (int b = 0; b < Bodies; b++)
                     {
                         var pelvis = snapshot.Bodies[b].Joints[0];
-                        candidates[b] = new KinectBodySelector.Candidate(snapshot.Bodies[b].Id, pelvis.Z * .001f, pelvis.Confidence);
+                        candidates[b] = new KinectBodySelector.Candidate(snapshot.Bodies[b].Id, pelvis.Z * .001f, pelvis.Confidence,
+                            EntryArea.Contains(new Vector3(pelvis.X, -pelvis.Y, pelvis.Z) * .001f));
                     }
                     int selected = bodySelector.Step(candidates, Bodies, Time.unscaledTime,
                         BodySwitchMargin, BodySwitchDelay, BodyLostGrace, LockSelectedPerson);
