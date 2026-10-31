@@ -9,7 +9,7 @@ namespace HighwaySurfing
     {
         public KinectHighwayInput Input;
         public bool EnableArmSpeed = true;
-        [Range(0, 220)] public float StartingSpeedKmh = 138;
+        [Range(0, 400)] public float StartingSpeedKmh = 138;
         [Range(2, 20)] public float ThresholdDegrees = 8;
         [Range(15, 60)] public float FullScaleDegrees = 28;
         [Range(1, 80)] public float AccelerationKmhPerSecond = 30;
@@ -46,7 +46,7 @@ namespace HighwaySurfing
             {
                 FrontWrist = candidate; neutral = sum / sampleCount; body = rig.BodyId; Calibrated = true;
             }
-            if (registered && !wasRegistered) Input.World.SpeedKmh = StartingSpeedKmh;
+            if (registered && !wasRegistered) Input.World.SpeedKmh = Mathf.Clamp(StartingSpeedKmh, 0, Input.World.SpeedLimitKmh);
             wasRegistered = registered; wasCalibrating = rig.Calibrating;
 
             float angle = 0;

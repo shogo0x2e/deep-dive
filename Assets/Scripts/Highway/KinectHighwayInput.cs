@@ -108,8 +108,8 @@ namespace HighwaySurfing
             World.ExternalRideReady=ready;
             World.ExternalSteeringAvailable=InputAvailable;
             World.SteeringInput=InputAvailable ? Mathf.Clamp(Rig.Steer*Sensitivity*(InvertSteering?-1:1),-1,1) : 0;
-            // During a retained registration with no usable steering, rebuild traffic around
-            // a straight clear corridor instead of letting existing cars hit an unsteerable rider.
+            // Retain visible cars through tracking loss. Future spawns leave a clear corridor;
+            // the world suppresses impact while registered steering is unavailable.
             World.TrafficSteeringScale=RideRegistered && !InputAvailable ? 0 : Mathf.Clamp01(Sensitivity);
             World.TrafficInputSmoothingSeconds=Rig.SmoothingSeconds;
             if (!SourceReady) Status=Rig.Status;

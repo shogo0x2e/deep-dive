@@ -1285,6 +1285,7 @@ MonoBehaviour:
   FieldOfView: 76
   EyeHeight: 1.25
   CameraBankDegrees: 2.5
+  MaximumSpeedKmh: 220
   SpeedKmh: 138
   LateralSpeed: 3.5
   KeyboardAccelerationKmhPerSecond: 30

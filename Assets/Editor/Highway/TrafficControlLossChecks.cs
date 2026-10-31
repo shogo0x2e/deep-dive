@@ -28,12 +28,15 @@ public static class TrafficControlLossChecks
             object car=vehicles.GetValue(0);
             car.GetType().GetField("Distance").SetValue(car,3.05f);
             car.GetType().GetField("Lateral").SetValue(car,world.LateralPosition);vehicles.SetValue(car,0);
+            var before=traffic;var lanes=new float[HighwayTraffic.PerDirectionCount];
+            for(int i=0;i<lanes.Length;i++)traffic.Sample(i,out _,out lanes[i],out _);
             tracked.SetValue(rig,false);inputUpdate.Invoke(input,null);worldUpdate.Invoke(world,null);
             traffic=(HighwayTraffic)trafficField.GetValue(world);
             Check(input.RideRegistered && !input.InputAvailable && traffic.UsesFixedClearCorridor,"tracking loss retains ride and opens a clear corridor");
             Check(world.CollisionCount==count,"near car cannot hit after steering becomes unavailable");
-            for(int i=0;i<HighwayTraffic.PerDirectionCount;i++)
-            {traffic.Sample(i,out _,out float x,out _);Check(Mathf.Abs(x-world.LateralPosition)>=1.499f,"corridor protects current position");}
+            Check(ReferenceEquals(before,traffic),"tracking loss does not replace visible traffic");
+            for(int i=0;i<lanes.Length;i++)
+            {traffic.Sample(i,out _,out float x,out _);Check(x==lanes[i],"tracking loss does not move visible cars sideways");}
             tracked.SetValue(rig,true);inputUpdate.Invoke(input,null);worldUpdate.Invoke(world,null);
             traffic=(HighwayTraffic)trafficField.GetValue(world);
             Check(input.InputAvailable && !traffic.UsesFixedClearCorridor,"tracking restoration safely rebuilds normal traffic");
@@ -41,9 +44,8 @@ public static class TrafficControlLossChecks
             float normalGap=traffic.MinimumHeadway;input.Sensitivity=.25f;
             inputUpdate.Invoke(input,null);worldUpdate.Invoke(world,null);traffic=(HighwayTraffic)trafficField.GetValue(world);
             Check(traffic.MinimumHeadway>normalGap,"live Kinect sensitivity widens required headway");
-            traffic.Sample(0,out float first,out _,out _);
-            Check(first>=traffic.MinimumHeadway,"low sensitivity also extends initial encounter distance");
-            return "PASS: tracked/lost/restored Kinect steering and live sensitivity preserve passable traffic without false impact.";
+            Check(ReferenceEquals(before,traffic),"live sensitivity changes future spacing without replacing traffic");
+            return "PASS: tracked/lost/restored Kinect steering and live sensitivity preserve traffic continuity without false impact.";
         }
         finally{tracked.SetValue(rig,true);input.Sensitivity=originalSensitivity;inputUpdate.Invoke(input,null);worldUpdate.Invoke(world,null);}
     }

@@ -20,7 +20,9 @@ namespace HighwaySurfing
         [Range(0.8f, 2.4f)] public float EyeHeight = 1.25f;
         [Range(0, 8)] public float CameraBankDegrees = 2.5f;
         [Header("Ride")]
-        [Range(0, 220)] public float SpeedKmh = 138;
+        [Tooltip("Player speed limit in km/h. Applies to keyboard, Kinect and the unattended demo; traffic keeps its own speed.")]
+        [Range(1, 400)] public float MaximumSpeedKmh = 220;
+        [Range(0, 400)] public float SpeedKmh = 138;
         [Range(0, 8)] public float LateralSpeed = 3.5f;
         [Min(0)] public float KeyboardAccelerationKmhPerSecond = 30;
         [Min(0)] public float KeyboardBrakingKmhPerSecond = 60;
@@ -37,7 +39,7 @@ namespace HighwaySurfing
         [Tooltip("Percentage of the current speed lost on contact. 30 means 138 km/h becomes 96.6 km/h. No automatic speed recovery; accelerate to regain speed.")]
         [Range(0, 100)] public float CollisionSpeedLossPercent = 30;
         [Header("Traffic")]
-        [Tooltip("More frequent traffic, with a passable width and enough steering time. Off restores the original traffic spacing. Low steering speed automatically increases spacing.")]
+        [Tooltip("More frequent traffic. Each car maintains a random 80-120 km/h speed, so gaps can close: brake or steer to avoid contact. Low steering speed increases spawn spacing.")]
         public bool DenseTraffic = true;
         [Header("World")]
         public int Seed = 47;
@@ -48,7 +50,8 @@ namespace HighwaySurfing
         public double TravelledMetres { get; private set; }
         public float CurrentSteering { get; private set; }
         public float KeyboardSpeedControl { get; private set; }
-        public float DefaultSpeedKmh => initialSpeed;
+        public float SpeedLimitKmh => Mathf.Clamp(MaximumSpeedKmh, 1, 400);
+        public float DefaultSpeedKmh => Mathf.Clamp(initialSpeed, 0, SpeedLimitKmh);
         public bool AttractDemoActive { get; set; }
         public float AttractDemoSpeedKmh { get; set; } = 138;
         public float AttractDemoSteering { get; set; }
@@ -66,17 +69,15 @@ namespace HighwaySurfing
         public string UpcomingBranchName => route.UpcomingBranchName;
         public float UpcomingBranchDistance => route.UpcomingBranchDistance((float)TravelledMetres);
         public string RoutePhase => route.Phase((float)TravelledMetres);
-        /// <summary>True when a traffic sample is in the approach, fork or connector.</summary>
-        public bool IsTrafficSuppressed(float distanceAhead) =>
-            distanceAhead >= UpcomingBranchDistance - 180 || route.IsTrafficSuppressed((float)TravelledMetres, distanceAhead);
         public const int TrafficCount = HighwayTraffic.Count;
         private HighwayTraffic traffic;
         private int trafficSeed;
-        private float trafficDrawDistance, trafficLateralSpeed, trafficSmoothing, initialSpeed = 138;
+        private float trafficDrawDistance, trafficLateralSpeed, trafficSmoothing, trafficSpeedLimit, initialSpeed = 138;
         private bool trafficDense;
-        private Func<float, bool> trafficSuppression;
+        private readonly HighwayTrafficRoutes trafficRoutes = new HighwayTrafficRoutes(TrafficCount);
+        private readonly int[] trafficRouteRevisions = new int[TrafficCount];
 
-        private readonly MeshBatch surfaces = new MeshBatch();
+        private readonly MeshBatch surfaces = new MeshBatch { Opacity = 1 };
         private readonly MeshBatch lights = new MeshBatch();
         private Mesh surfaceMesh, glowMesh;
         private GameObject generatedRoot;
@@ -94,7 +95,6 @@ namespace HighwaySurfing
         private void OnEnable()
         {
             built = false;
-            trafficSuppression = IsTrafficSuppressed;
             initialSpeed = SpeedKmh;
             if(Application.isPlaying){Application.runInBackground=true;Application.targetFrameRate=60;}
         }
@@ -123,7 +123,7 @@ namespace HighwaySurfing
                     ((k.upArrowKey.isPressed || k.wKey.isPressed) ? 1 : 0) -
                     ((k.downArrowKey.isPressed || k.sKey.isPressed) ? 1 : 0) : 0;
                 ApplySpeedControl(KeyboardSpeedControl, KeyboardAccelerationKmhPerSecond, KeyboardBrakingKmhPerSecond, dt);
-                SpeedKmh = Mathf.Clamp(SpeedKmh, 0, 220);
+                SpeedKmh = Mathf.Clamp(SpeedKmh, 0, SpeedLimitKmh);
                 float steer = AttractDemoActive ? AttractDemoSteering : UseExternalSteering ? SteeringInput : k == null ? 0 :
                     ((k.rightArrowKey.isPressed || k.dKey.isPressed) ? 1 : 0) - ((k.leftArrowKey.isPressed || k.aKey.isPressed) ? 1 : 0);
                 CurrentSteering = !AttractDemoActive && UseExternalSteering && !ExternalSteeringAvailable ? 0 :
@@ -138,13 +138,14 @@ namespace HighwaySurfing
                 bank = Mathf.Lerp(bank, -CurrentSteering * CameraBankDegrees, 1 - Mathf.Exp(-dt * 4));
                 EnsureTraffic();
                 var hit = traffic.Step(dt, (float)(TravelledMetres - previousDistance), previousLateral,
-                    LateralPosition, SpeedKmh, active, trafficSuppression, LateralSpeed);
+                    LateralPosition, SpeedKmh, active, maximumLateralSpeed: LateralSpeed);
+                SyncTrafficRoutes();
                 if (hit.HasValue && !AttractDemoActive)
                 {
                     // Traffic latches a continuous contact, so this penalty happens once.
                     // Keep the pre-impact relative speed in the event for sound and camera strength.
                     if (CollisionSlowdownEnabled)
-                        SpeedKmh = Mathf.Clamp(SpeedKmh, 0, 220) * (1 - Mathf.Clamp01(CollisionSpeedLossPercent / 100));
+                        SpeedKmh = Mathf.Clamp(SpeedKmh, 0, SpeedLimitKmh) * (1 - Mathf.Clamp01(CollisionSpeedLossPercent / 100));
                     CollisionCount++;
                     Collided?.Invoke(hit.Value);
                 }
@@ -156,15 +157,15 @@ namespace HighwaySurfing
         {
             TravelledMetres = 0; elapsed = 0; LateralPosition = -3.1f; route.Reset();
             CurrentSteering = 0; SteeringInput = 0; bank = 0; Paused = false;
-            SpeedKmh = initialSpeed; KeyboardSpeedControl = 0; CollisionCount = 0; RideRevision++;
-            EnsureTraffic(); traffic.Reset(SpeedKmh, LateralPosition);
+            SpeedKmh = DefaultSpeedKmh; KeyboardSpeedControl = 0; CollisionCount = 0; RideRevision++;
+            EnsureTraffic(); traffic.Reset(SpeedKmh, LateralPosition); SyncTrafficRoutes();
         }
 
         public void ApplySpeedControl(float control, float acceleration, float braking, float dt)
         {
             if (Paused || Time.timeScale <= 0 || AttractDemoActive) return;
             SpeedKmh = Mathf.Clamp(SpeedKmh + Mathf.Clamp(control, -1, 1) *
-                (control > 0 ? acceleration : braking) * Mathf.Clamp(dt, 0, .05f), 0, 220);
+                (control > 0 ? acceleration : braking) * Mathf.Clamp(dt, 0, .05f), 0, SpeedLimitKmh);
         }
 
         private void EnsureTraffic()
@@ -173,11 +174,23 @@ namespace HighwaySurfing
             if (traffic != null && trafficSeed == Seed && trafficDense == DenseTraffic &&
                 Mathf.Approximately(trafficDrawDistance, DrawDistance) &&
                 Mathf.Approximately(trafficLateralSpeed, availableLateral) &&
-                Mathf.Approximately(trafficSmoothing, TrafficInputSmoothingSeconds)) return;
+                Mathf.Approximately(trafficSmoothing, TrafficInputSmoothingSeconds) &&
+                Mathf.Approximately(trafficSpeedLimit, SpeedLimitKmh)) return;
+            bool create = traffic == null || trafficSeed != Seed;
             trafficSeed = Seed; trafficDrawDistance = DrawDistance; trafficDense = DenseTraffic;
             trafficLateralSpeed = availableLateral; trafficSmoothing = TrafficInputSmoothingSeconds;
-            traffic = new HighwayTraffic(Seed, DrawDistance, DenseTraffic, availableLateral, trafficSmoothing, LateralPosition);
-            traffic.Reset(SpeedKmh, LateralPosition);
+            trafficSpeedLimit = SpeedLimitKmh;
+            if (create)
+            {
+                traffic = new HighwayTraffic(Seed, DrawDistance, DenseTraffic, availableLateral, trafficSmoothing, LateralPosition, trafficSpeedLimit);
+                traffic.CanRecycle = CanRecycleTraffic;
+                traffic.PlaceRecycledVehicle = PlaceRecycledTraffic;
+                traffic.CollisionAllowed = CanTrafficCollide;
+                Array.Clear(trafficRouteRevisions, 0, TrafficCount);
+                traffic.Reset(SpeedKmh, LateralPosition);
+                SyncTrafficRoutes();
+            }
+            else traffic.Configure(DrawDistance, DenseTraffic, availableLateral, trafficSmoothing, LateralPosition, trafficSpeedLimit);
         }
 
         [ContextMenu("Refresh preview")]
@@ -298,7 +311,9 @@ namespace HighwaySurfing
         {
             EnsureTraffic();
             bool visible = traffic.Sample(index, out distanceAhead, out lateral, out relativeSpeed);
-            return visible && !IsTrafficSuppressed(distanceAhead);
+            // Audio/autopilot samples only cars on the rider's road. Rendering uses the
+            // persistent world-space frame separately, so neighbouring motorway cars stay visible.
+            return visible && TrafficSharesRiderRoad(index);
         }
 
         private void BuildCity(float s)
@@ -380,6 +395,7 @@ namespace HighwaySurfing
 
         private sealed class MeshBatch
         {
+            public float Opacity = -1;
             private readonly List<Vector3> vertices=new List<Vector3>(50000);
             private readonly List<Color> colors=new List<Color>(50000);
             private readonly List<Vector2> uvs=new List<Vector2>(50000);
@@ -389,6 +405,7 @@ namespace HighwaySurfing
             public void Quad(Vector3 a,Vector3 b,Vector3 c,Vector3 d,Color color)=>Quad(a,b,c,d,color,color,color,color);
             public void Quad(Vector3 a,Vector3 b,Vector3 c,Vector3 d,Color ca,Color cb,Color cc,Color cd)
             {
+                if(Opacity>=0)ca.a=cb.a=cc.a=cd.a=Opacity;
                 int i=vertices.Count;vertices.Add(a);vertices.Add(b);vertices.Add(c);vertices.Add(d);
                 colors.Add(ca);colors.Add(cb);colors.Add(cc);colors.Add(cd);
                 uvs.Add(Vector2.zero);uvs.Add(Vector2.right);uvs.Add(Vector2.one);uvs.Add(Vector2.up);

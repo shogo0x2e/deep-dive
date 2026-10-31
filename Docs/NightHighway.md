@@ -5,12 +5,12 @@ Mac・Kinectなしで試す場合は `Assets/Scenes/Sandbox/HighwayKeyboard.unit
 `Assets/Scenes/Main.unity` を開いて Play。統合版はKinectを起動し、中央登録後に夜の高速道路を自動前進します。[Kinectで走る手順](PlayKinectHighway.md)を参照してください。Kでキーボードプレビューへ切り替えると、以下の操作を使えます。
 
 - A / D、または左右矢印: 道路内を左右移動。離すと横移動が止まります。
-- W / S、または上下矢印: 速度を調整（0〜220 km/h）。
+- W / S、または上下矢印: 速度を調整（標準0〜220 km/h）。
 - Space: 一時停止 / 再開。
 - R: 開始位置・姿勢に戻す。
 - H: 操作用HUDを表示 / 非表示。
 
-`NightHighway` の Inspector で速度、視野角、視点の高さ、横移動速度、カメラの傾きを調整できます。標準速度は138 km/hです。操作用HUDはOBS向けのカメラ映像に含みません。
+`NightHighway` の Inspector で速度、視野角、視点の高さ、横移動速度、カメラの傾きを調整できます。標準速度は138 km/hです。**Ride > Maximum Speed Kmh** は初期220で、400 km/hまで変更できます。周囲の車は各車ごとに80〜120 km/hのランダムな固定速度で走ります。操作用HUDはOBS向けのカメラ映像に含みません。
 
 KinectHighwayInputが `UseExternalSteering`、`SteeringInput`、`ExternalRideReady`、`ExternalSteeringAvailable` を設定します。道路に沿う前進と横移動は独立し、入力が失われたフレームで横移動を止めます。
 

@@ -56,15 +56,6 @@ namespace HighwaySurfing
                 return TookExit(exits.Count - 1) ? "CONNECTOR" : "MAINLINE";
             return UpcomingBranchDistance(travel) <= 250 ? "APPROACH" : "MAINLINE";
         }
-        public bool IsTrafficSuppressed(float travel, float distanceAhead)
-        {
-            float at = travel + distanceAhead;
-            int nearest = Mathf.Max(0, Mathf.FloorToInt((at - FirstBranch) / BranchInterval));
-            for (int i = nearest; i <= nearest + 1; i++)
-                if (at >= BranchAt(i) - 180 && at <= BranchAt(i) + ConnectorLength + 80) return true;
-            return false;
-        }
-
         /// <summary>Sample the travelled itinerary by actual metres along each road.</summary>
         public Frame Sample(float travel)
         {

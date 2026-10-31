@@ -15,13 +15,13 @@ public static class HighwayCollisionPlayChecks
     static HighwayImpactFeedback impact;
     static Keyboard keyboard, originalKeyboard;
     static bool running, originalEnabled;
-    static float originalLoss, expected, speedAtHit;
+    static float originalLoss, originalMaximum, expected, speedAtHit;
     static int scenario, stage, impactBaseline, assertions;
     static double since;
     static readonly List<string> results = new List<string>();
-    static readonly float[] Speeds = {220,220,138,138,86.4f,0};
-    static readonly float[] Losses = {30,30,10,100,30,30};
-    static readonly string[] Names = {"enabled 30%", "disabled", "custom 10%", "full stop 100%", "equal-speed side contact", "stationary rear contact"};
+    static readonly float[] Speeds = {220,220,138,138,100,0,400};
+    static readonly float[] Losses = {30,30,10,100,30,30,30};
+    static readonly string[] Names = {"enabled 30%", "disabled", "custom 10%", "full stop 100%", "equal-speed side contact", "stationary rear contact", "400 km/h contact"};
 
     [MenuItem("Tools/Highway Surfing/Checks/Collision Slowdown (Play)")]
     public static void Run() => Debug.Log(Start());
@@ -34,6 +34,7 @@ public static class HighwayCollisionPlayChecks
         impact=world.GetComponent<HighwayImpactFeedback>();
         if(impact==null) throw new InvalidOperationException("Impact feedback is required.");
         originalEnabled=world.CollisionSlowdownEnabled; originalLoss=world.CollisionSpeedLossPercent;
+        originalMaximum=world.MaximumSpeedKmh;
         originalKeyboard=Keyboard.current;
         keyboard=InputSystem.AddDevice<Keyboard>("CollisionCheckKeyboard"); keyboard.MakeCurrent();
         InputSystem.QueueStateEvent(keyboard,new KeyboardState());
@@ -45,12 +46,16 @@ public static class HighwayCollisionPlayChecks
     }
     static void Prepare()
     {
+        world.MaximumSpeedKmh=scenario==6?400:220;
         world.ResetRide(); world.SpeedKmh=Speeds[scenario];
         world.CollisionSlowdownEnabled=scenario!=1; world.CollisionSpeedLossPercent=Losses[scenario];
-        expected=Speeds[scenario]*(scenario==1 ? 1 : 1-Losses[scenario]/100);
         world.TrySampleTraffic(0,out _,out float lane,out _);
         // Arrange a near contact, then let normal Update, swept collision and the event run.
         var traffic=(HighwayTraffic)typeof(NightHighwayWorld).GetField("traffic",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(world);
+        traffic.Reset(world.SpeedKmh);
+        traffic.Sample(0,out _,out _,out float relativeSpeed);
+        if(scenario==4)world.SpeedKmh+=relativeSpeed*3.6f;
+        expected=world.SpeedKmh*(scenario==1 ? 1 : 1-Losses[scenario]/100);
         var vehicles=(Array)typeof(HighwayTraffic).GetField("vehicles",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(traffic);
         object car=vehicles.GetValue(0);
         car.GetType().GetField("Distance").SetValue(car,scenario==5 ? -12f : scenario==4 ? 0f : 12f);
@@ -125,6 +130,7 @@ public static class HighwayCollisionPlayChecks
         if(originalKeyboard!=null && originalKeyboard.added) originalKeyboard.MakeCurrent();
         if(world!=null)
         {
+            world.MaximumSpeedKmh=originalMaximum;
             world.CollisionSlowdownEnabled=originalEnabled; world.CollisionSpeedLossPercent=originalLoss; world.ResetRide();
         }
         Directory.CreateDirectory(".Local/Review");

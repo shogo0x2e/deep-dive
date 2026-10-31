@@ -53,7 +53,6 @@ public static class HighwayRouteChecks
         check(Vector3.Distance(merge.Position,route.Crossing(0,0).Position)<.001f,"merge shares destination centreline");
         check(Vector3.Distance(route.Sample(first+length-.01f).Position,route.Sample(first+length+.01f).Position)<.021f,"position continuous at merge");
         check(Vector3.Angle(route.Sample(first+length-.01f).Forward,route.Sample(first+length+.01f).Forward)<.02f,"heading continuous at merge");
-        check(route.IsTrafficSuppressed(0,first-180) && route.IsTrafficSuppressed(0,first+length+80) && !route.IsTrafficSuppressed(0,first-181),"traffic cleared through full ramp");
         var oldRamp=route.Branch(0,330,true); var oldCross=route.Crossing(0,-300);
         route.Advance(HighwayRouteState.BranchAt(1),-7.5f);
         check(Vector3.Distance(oldRamp.Position,route.Branch(0,330,true).Position)<.001f && Vector3.Distance(oldCross.Position,route.Crossing(0,-300).Position)<.001f,"later choice cannot move old roads");

@@ -23,6 +23,10 @@ Shader "Highway/Surface"
             }
             half4 Frag(Varyings v) : SV_Target
             {
+                // Traffic fades only at the far horizon. Screen-space dithering retains
+                // correct opaque depth/occlusion without sorting transparent car bodies.
+                float dither = frac(52.9829189 * frac(dot(v.positionCS.xy, float2(0.06711056, 0.00583715))));
+                clip(v.color.a - max(0.0001, dither));
                 float fog = 1-exp(-v.distance*0.0019);
                 return half4(lerp(v.color.rgb, float3(0.009,0.011,0.018), fog*fog),1);
             }

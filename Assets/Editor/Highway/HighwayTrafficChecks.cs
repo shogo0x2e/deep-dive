@@ -7,16 +7,16 @@ public static class HighwayTrafficChecks
     public static string Run()
     {
         int checks = 0;
-        // Same-direction cars share a velocity, so their headway survives every speed change.
-        // Dense traffic still preserves its steering-capacity-based headway through recycling.
+        // Each ID keeps its own speed through player acceleration and vehicle recycling.
         for (int seed = 0; seed < 24; seed++)
         {
             var a = new HighwayTraffic(seed, 1100);
             var b = new HighwayTraffic(seed, 1100);
-            a.Sample(0, out float first, out _, out _);
-            float closing = 138f / 3.6f - HighwayTraffic.SameDirectionSpeed;
-            Check(first / closing * (138f / 3.6f) < 420f, "First car is reachable before ramp suppression at 138 km/h");
-            Check(first / (220f / 3.6f - HighwayTraffic.SameDirectionSpeed) > 2.5f, "Initial grace at top speed");
+            a.Sample(0, out float first, out _, out float firstSpeed);
+            Check(first / (220f / 3.6f - firstSpeed) > 2.5f, "Initial grace at top speed");
+            var speeds = new float[HighwayTraffic.Count];
+            for (int i = 0; i < speeds.Length; i++) a.Sample(i, out _, out _, out speeds[i]);
+            Check(Mathf.Abs(speeds[0]-speeds[1])>.01f, "Individual speeds vary");
             bool centre = false;
             for (int frame = 0; frame < 1200; frame++)
             {
@@ -29,15 +29,13 @@ public static class HighwayTrafficChecks
                     bool av = a.Sample(i, out float ad, out float al, out float ar);
                     bool bv = b.Sample(i, out float bd, out float bl, out float br);
                     Check(av == bv && ad == bd && al == bl && ar == br, "Deterministic state");
+                    Check(Mathf.Abs(ar + speed/3.6f - speeds[i]) < .0001f, "Per-car speed stays constant");
+                    Check(Mathf.Abs(speeds[i])*3.6f >= 80 && Mathf.Abs(speeds[i])*3.6f <= 120, "80-120 km/h range");
+                    Check((i < HighwayTraffic.PerDirectionCount) == (speeds[i]>0), "Correct travel direction");
                     if (i < HighwayTraffic.PerDirectionCount)
                     {
                         Check(al >= -8.65f && al <= -2.35f, "Traffic stays on carriageway");
                         if (Mathf.Abs(al + 5.3f) < HighwayTraffic.VehicleHalfWidth + HighwayTraffic.PlayerRadius) centre = true;
-                        for (int j = i + 1; j < HighwayTraffic.PerDirectionCount; j++)
-                        {
-                            a.Sample(j, out float other, out _, out _);
-                            Check(Mathf.Abs(ad - other) >= a.MinimumHeadway - .1f, "Headway survived changes and recycling");
-                        }
                     }
                 }
             }
@@ -50,7 +48,7 @@ public static class HighwayTrafficChecks
         Check(!HighwayTraffic.SweptContact(4, 2, 4, 0, out _), "Side movement outside length misses"); checks++;
 
         var traffic = new HighwayTraffic(47, 1100);
-        traffic.Sample(0, out float initialDistance, out float lane, out _);
+        traffic.Sample(0, out float initialDistance, out float lane, out float vehicleSpeed);
         Check(initialDistance >= 110 && initialDistance < 140, "Initial grace and early encounter"); checks++;
         traffic.Step(.1f, 0, lane, lane, 0, false);
         traffic.Sample(0, out float paused, out _, out _);
@@ -72,7 +70,7 @@ public static class HighwayTrafficChecks
         {
             traffic.Sample(0, out float d, out _, out _);
             if (d <= 0) break;
-            float dt = Mathf.Min(.05f, d / (220f / 3.6f - HighwayTraffic.SameDirectionSpeed));
+            float dt = Mathf.Min(.05f, d / (220f / 3.6f - vehicleSpeed));
             traffic.Step(dt, 220f / 3.6f * dt, safe, safe, 220, true);
         }
         traffic.Sample(0, out float arrival, out _, out _);
@@ -82,7 +80,7 @@ public static class HighwayTrafficChecks
         for (int frame = 0; frame < 100; frame++)
         {
             float next = Mathf.MoveTowards(x, lane, 3.5f * .05f);
-            var hit = traffic.Step(.05f, HighwayTraffic.SameDirectionSpeed * .05f, x, next, HighwayTraffic.SameDirectionSpeed * 3.6f, true);
+            var hit = traffic.Step(.05f, vehicleSpeed * .05f, x, next, vehicleSpeed * 3.6f, true);
             if (hit.HasValue) { Check(hit.Value.VehicleId == 0, "Expected car hit"); hits++; }
             x = next;
         }
@@ -97,15 +95,15 @@ public static class HighwayTrafficChecks
         {
             traffic.Sample(0, out float d, out _, out _);
             if (d <= 0) break;
-            float dt = Mathf.Min(.05f, d / (220f / 3.6f - HighwayTraffic.SameDirectionSpeed));
+            float dt = Mathf.Min(.05f, d / (220f / 3.6f - vehicleSpeed));
             traffic.Step(dt, 220f / 3.6f * dt, safe, safe, 220, true);
         }
         hits = 0; x = safe;
         for (int frame = 0; frame < 40; frame++)
         {
             float next = Mathf.MoveTowards(x, lane, 8f * .05f);
-            if (traffic.Step(.05f, HighwayTraffic.SameDirectionSpeed * .05f, x, next,
-                HighwayTraffic.SameDirectionSpeed * 3.6f, true, maximumLateralSpeed: 8).HasValue) hits++;
+            if (traffic.Step(.05f, vehicleSpeed * .05f, x, next,
+                vehicleSpeed * 3.6f, true, maximumLateralSpeed: 8).HasValue) hits++;
             x = next;
         }
         Check(hits == 1, "Fast configured lateral steering still hits once"); checks++;
@@ -116,13 +114,13 @@ public static class HighwayTrafficChecks
         {
             traffic.Sample(0, out float d, out _, out _);
             if (d <= 0) break;
-            float dt = Mathf.Min(.05f, d / (220f / 3.6f - HighwayTraffic.SameDirectionSpeed));
+            float dt = Mathf.Min(.05f, d / (220f / 3.6f - vehicleSpeed));
             Check(!traffic.Step(dt, 220f / 3.6f * dt, revealLane, revealLane, 220, true, _ => true).HasValue,
                 "Suppressed car cannot hit");
         }
         for (int frame = 0; frame < 30; frame++)
-            Check(!traffic.Step(.05f, HighwayTraffic.SameDirectionSpeed * .05f, revealLane, revealLane,
-                HighwayTraffic.SameDirectionSpeed * 3.6f, true, _ => false).HasValue,
+            Check(!traffic.Step(.05f, vehicleSpeed * .05f, revealLane, revealLane,
+                vehicleSpeed * 3.6f, true, _ => false).HasValue,
                 "Revealing an overlapping car does not create a hit");
         checks++;
 
@@ -147,7 +145,7 @@ public static class HighwayTrafficChecks
             if (hit.HasValue && hit.Value.VehicleId == rearId) { rearHit = true; break; }
         }
         Check(rearHit, "A car approaching from behind can hit a stopped rider"); checks++;
-        return $"PASS: {checks} traffic checks (plus deterministic/headway samples)";
+        return $"PASS: {checks} traffic checks (plus deterministic/constant-speed samples)";
     }
 
     static void Check(bool condition, string name) { if (!condition) throw new Exception(name); }
