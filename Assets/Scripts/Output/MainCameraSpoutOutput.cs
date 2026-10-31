@@ -12,9 +12,10 @@ namespace HighwaySurfing.Output
         [SerializeField] private Camera sourceCamera;
         [SerializeField] private SpoutResources resources;
         [SerializeField] private string senderName = "HighwaySurfing.Main";
-        [SerializeField, Min(16)] private int width = 1920;
-        [SerializeField, Min(16)] private int height = 1080;
+        [SerializeField, Min(16)] private int width = 2160;
+        [SerializeField, Min(16)] private int height = 2160;
         [SerializeField] private bool previewInGameView = true;
+        [SerializeField] private ProjectionDebugView projectionDebugView;
 
         public RenderTexture OutputTexture => output;
         public string SenderName => senderName;
@@ -26,10 +27,11 @@ namespace HighwaySurfing.Output
         private RenderTexture output, previousTarget;
         private GameObject preview;
 
-        public void Configure(Camera camera, SpoutResources spoutResources)
+        public void Configure(Camera camera, SpoutResources spoutResources, ProjectionDebugView debugView)
         {
             sourceCamera = camera;
             resources = spoutResources;
+            projectionDebugView = debugView;
         }
 
         private void OnEnable()
@@ -84,7 +86,22 @@ namespace HighwaySurfing.Output
 
         private void CameraRendered(ScriptableRenderContext context, Camera camera)
         {
-            if (camera == renderCamera) RenderedFrames++;
+            if (camera != renderCamera) return;
+            RenderedFrames++;
+            if (output == null || projectionDebugView == null || !projectionDebugView.isActiveAndEnabled) return;
+
+            // Replace the completed frame, including tutorial UI and post-processing,
+            // before the local preview and Spout's end-of-frame texture capture.
+            var previous = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = output;
+                GL.Clear(false, true, projectionDebugView.OutputColor);
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+            }
         }
 
         private void CreatePreview()

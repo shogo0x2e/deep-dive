@@ -29,10 +29,27 @@ namespace HighwaySurfing.EditorTools
             var output = camera.GetComponent<MainCameraSpoutOutput>();
             if (output == null) output = Undo.AddComponent<MainCameraSpoutOutput>(camera.gameObject);
             Undo.RecordObject(output, "Configure Main Camera output");
-            output.Configure(camera, resources);
+            output.Configure(camera, resources, GetOrCreateProjectionDebugView(camera.gameObject.scene));
+            PlayerSpeedViewSetup.Configure(camera);
             EditorUtility.SetDirty(sender);
             EditorUtility.SetDirty(output);
             EditorSceneManager.MarkSceneDirty(camera.gameObject.scene);
+        }
+
+        private static ProjectionDebugView GetOrCreateProjectionDebugView(UnityEngine.SceneManagement.Scene scene)
+        {
+            foreach (var existing in Object.FindObjectsByType<ProjectionDebugView>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (existing.gameObject.scene == scene) return existing;
+            }
+
+            var go = new GameObject("ProjectionDebugView");
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, scene);
+            Undo.RegisterCreatedObjectUndo(go, "Create projection debug view");
+            var view = Undo.AddComponent<ProjectionDebugView>(go);
+            go.SetActive(false);
+            return view;
         }
     }
 }
