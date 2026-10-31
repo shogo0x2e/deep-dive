@@ -14,13 +14,15 @@ public static class SpeedLimitChecks
         if(!EditorApplication.isPlaying || world==null || world.UseExternalSteering || Time.deltaTime<=0)
             throw new Exception("Run in the playing keyboard Sandbox.");
         float originalLimit=world.MaximumSpeedKmh;
+        bool originalSlowdown=world.CollisionSlowdownEnabled;
         var originalKeyboard=Keyboard.current;
         var keyboard=InputSystem.AddDevice<Keyboard>("SpeedLimitCheckKeyboard"); keyboard.MakeCurrent();
         var update=typeof(NightHighwayWorld).GetMethod("Update",BindingFlags.Instance|BindingFlags.NonPublic);
         int checks=0;
         try
         {
-            foreach(float limit in new[]{220f,400f,60f})
+            world.CollisionSlowdownEnabled=false;
+            foreach(float limit in new[]{220f,400f,60f,10000f})
             {
                 world.MaximumSpeedKmh=limit;world.ResetRide();
                 Check(Mathf.Abs(world.SpeedKmh-Mathf.Min(138,limit))<.01f,"reset respects cap");checks++;
@@ -37,21 +39,23 @@ public static class SpeedLimitChecks
                 InputSystem.QueueStateEvent(keyboard,new KeyboardState());InputSystem.Update();
                 world.SpeedKmh=limit-.1f;world.ApplySpeedControl(1,30,60,.05f);
                 Check(world.SpeedKmh==limit,"shared Kinect speed control respects cap");checks++;
-                world.AttractDemoActive=true;world.AttractDemoSpeedKmh=500;
+                world.AttractDemoActive=true;world.AttractDemoSpeedKmh=20000;
                 update.Invoke(world,null);
                 Check(world.SpeedKmh==limit,"demo respects cap");checks++;
-                world.AttractDemoActive=false;world.SpeedKmh=400;
+                world.AttractDemoActive=false;world.SpeedKmh=20000;
                 double before=world.TravelledMetres;update.Invoke(world,null);
                 Check(world.SpeedKmh==limit && Math.Abs(world.TravelledMetres-before-limit/3.6*Mathf.Min(Time.deltaTime,.05f))<.001,
                     "actual distance uses configured cap");checks++;
+                Check(world.MainCamera.fieldOfView>=40 && world.MainCamera.fieldOfView<=110,"FOV remains usable at high speed");checks++;
             }
-            return "PASS: "+checks+" live speed-limit checks (keyboard, shared arm control, demo, reset and distance at 60/220/400).";
+            return "PASS: "+checks+" live speed-limit checks (keyboard, shared arm control, demo, reset, FOV and distance at 60/220/400/10000).";
         }
         finally
         {
             InputSystem.RemoveDevice(keyboard);
             if(originalKeyboard!=null && originalKeyboard.added)originalKeyboard.MakeCurrent();
-            world.MaximumSpeedKmh=originalLimit;world.AttractDemoActive=false;world.AttractDemoSpeedKmh=138;world.ResetRide();
+            world.MaximumSpeedKmh=originalLimit;world.CollisionSlowdownEnabled=originalSlowdown;
+            world.AttractDemoActive=false;world.AttractDemoSpeedKmh=138;world.ResetRide();
         }
     }
     static void Check(bool ok,string name){if(!ok)throw new Exception(name);}

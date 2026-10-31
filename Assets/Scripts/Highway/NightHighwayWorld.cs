@@ -21,8 +21,8 @@ namespace HighwaySurfing
         [Range(0, 8)] public float CameraBankDegrees = 2.5f;
         [Header("Ride")]
         [Tooltip("Player speed limit in km/h. Applies to keyboard, Kinect and the unattended demo; traffic keeps its own speed.")]
-        [Range(1, 400)] public float MaximumSpeedKmh = 220;
-        [Range(0, 400)] public float SpeedKmh = 138;
+        [Range(1, HighwayTraffic.MaximumSupportedPlayerSpeedKmh)] public float MaximumSpeedKmh = 220;
+        [Range(0, HighwayTraffic.MaximumSupportedPlayerSpeedKmh)] public float SpeedKmh = 138;
         [Range(0, 8)] public float LateralSpeed = 3.5f;
         [Min(0)] public float KeyboardAccelerationKmhPerSecond = 30;
         [Min(0)] public float KeyboardBrakingKmhPerSecond = 60;
@@ -50,7 +50,7 @@ namespace HighwaySurfing
         public double TravelledMetres { get; private set; }
         public float CurrentSteering { get; private set; }
         public float KeyboardSpeedControl { get; private set; }
-        public float SpeedLimitKmh => Mathf.Clamp(MaximumSpeedKmh, 1, 400);
+        public float SpeedLimitKmh => Mathf.Clamp(MaximumSpeedKmh, 1, HighwayTraffic.MaximumSupportedPlayerSpeedKmh);
         public float DefaultSpeedKmh => Mathf.Clamp(initialSpeed, 0, SpeedLimitKmh);
         public bool AttractDemoActive { get; set; }
         public float AttractDemoSpeedKmh { get; set; } = 138;
@@ -105,17 +105,12 @@ namespace HighwaySurfing
             if (Application.isPlaying)
             {
                 float dt = Mathf.Min(Time.deltaTime, .05f);
-                double previousDistance = TravelledMetres;
-                float previousLateral = LateralPosition;
                 var k = Keyboard.current;
                 if (k != null)
                 {
                     if (k.spaceKey.wasPressedThisFrame) Paused = !Paused;
                     if (k.hKey.wasPressedThisFrame) ShowHud = !ShowHud;
-                    if (k.rKey.wasPressedThisFrame)
-                    {
-                        ResetRide(); previousDistance = TravelledMetres; previousLateral = LateralPosition;
-                    }
+                    if (k.rKey.wasPressedThisFrame) ResetRide();
                 }
                 bool active = MotionActive;
                 if (AttractDemoActive) SpeedKmh = AttractDemoSpeedKmh;
@@ -128,17 +123,32 @@ namespace HighwaySurfing
                     ((k.rightArrowKey.isPressed || k.dKey.isPressed) ? 1 : 0) - ((k.leftArrowKey.isPressed || k.aKey.isPressed) ? 1 : 0);
                 CurrentSteering = !AttractDemoActive && UseExternalSteering && !ExternalSteeringAvailable ? 0 :
                     Mathf.Lerp(CurrentSteering, Mathf.Clamp(steer, -1, 1), 1 - Mathf.Exp(-dt * 9));
-                if (active)
-                {
-                    TravelledMetres += SpeedKmh / 3.6 * dt;
-                    elapsed += dt;
-                    LateralPosition = Mathf.Clamp(LateralPosition + CurrentSteering * LateralSpeed * dt, -9.5f, -1.5f);
-                    route.Advance((float)TravelledMetres, LateralPosition);
-                }
+                if (active) AdvanceRide(dt);
                 bank = Mathf.Lerp(bank, -CurrentSteering * CameraBankDegrees, 1 - Mathf.Exp(-dt * 4));
-                EnsureTraffic();
-                var hit = traffic.Step(dt, (float)(TravelledMetres - previousDistance), previousLateral,
-                    LateralPosition, SpeedKmh, active, maximumLateralSpeed: LateralSpeed);
+            }
+            RenderWorld();
+        }
+
+        private void AdvanceRide(float dt)
+        {
+            EnsureTraffic();
+            // At 10,000 km/h a 50 ms frame travels 139 m. Keep junction decisions and
+            // swept contacts on short road segments; render only once after all movement.
+            float remaining = dt;
+            while (remaining > .000001f)
+            {
+                float metresPerSecond = SpeedKmh / 3.6f;
+                float step = Mathf.Min(remaining, 10 / Mathf.Max(1, metresPerSecond));
+                float toBranch = UpcomingBranchDistance;
+                if (toBranch > .001f && metresPerSecond > 0) step = Mathf.Min(step, toBranch / metresPerSecond);
+                double previousDistance = TravelledMetres;
+                float previousLateral = LateralPosition;
+                TravelledMetres += SpeedKmh / 3.6 * step;
+                elapsed += step;
+                LateralPosition = Mathf.Clamp(LateralPosition + CurrentSteering * LateralSpeed * step, -9.5f, -1.5f);
+                route.Advance((float)TravelledMetres, LateralPosition);
+                var hit = traffic.Step(step, (float)(TravelledMetres - previousDistance), previousLateral,
+                    LateralPosition, SpeedKmh, true, maximumLateralSpeed: LateralSpeed);
                 SyncTrafficRoutes();
                 if (hit.HasValue && !AttractDemoActive)
                 {
@@ -149,8 +159,8 @@ namespace HighwaySurfing
                     CollisionCount++;
                     Collided?.Invoke(hit.Value);
                 }
+                remaining -= step;
             }
-            RenderWorld();
         }
 
         public void ResetRide()
@@ -285,7 +295,7 @@ namespace HighwaySurfing
             MainCamera.transform.localPosition = new Vector3(LateralPosition, EyeHeight + .008f * Mathf.Sin(elapsed * 4), 0);
             float grade = (Center(s + 2).y - Center(s - 2).y) / 4;
             MainCamera.transform.localRotation = Quaternion.Euler(1.0f - Mathf.Atan(grade) * Mathf.Rad2Deg, CurrentSteering * 1.2f, bank);
-            MainCamera.fieldOfView = FieldOfView + (SpeedKmh - 138) * .025f;
+            MainCamera.fieldOfView = Mathf.Clamp(FieldOfView + (SpeedKmh - 138) * .025f, 40, 110);
             surfaces.Clear(); lights.Clear();
             BuildRoad(s);
             BuildDirectionSigns(s);

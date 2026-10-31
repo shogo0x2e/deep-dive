@@ -233,12 +233,14 @@ namespace HighwaySurfing
             float lampPitch = Mathf.Lerp(1.1f, 1.65f, Mathf.Clamp01(speed / 62));
             int lamp = Mathf.FloorToInt((route + speed * StreetPassPeakSeconds / lampPitch) / 42);
             // Ignore resets, wrapping traffic and the first frame after registration / pause.
-            bool continuous = active && observing && route >= previousRoute && route - previousRoute < 10;
+            float movementBudget = World.SpeedLimitKmh / 3.6f * Mathf.Min(Time.deltaTime, .05f) + .5f;
+            bool continuous = active && observing && route >= previousRoute && route - previousRoute <= movementBudget;
             if (continuous && SoundEnabled && speed > 4 && lamp > previousLamp && lamp > lastLampSound)
             {
                 float dx = -2.4f - World.LateralPosition;
+                // At extreme speed lamps pass every frame; keep voices for nearby cars.
                 if (PlayPass(StreetPassClip != null ? StreetPassClip : PassByClip,
-                    .18f + Mathf.Clamp01(speed / 60) * .12f, dx / 10, lampPitch))
+                    .18f + Mathf.Clamp01(speed / 60) * .12f, dx / 10, lampPitch, voiceLimit: 2))
                     StreetPassCount++;
                 lastLampSound = lamp;
             }
@@ -249,9 +251,12 @@ namespace HighwaySurfing
                 float magnitude = Mathf.Abs(relativeSpeed);
                 float pitch = RecordedPassBy ? Mathf.Lerp(.9f, 1.25f, Mathf.Clamp01(magnitude / 80)) :
                     Mathf.Lerp(.75f, 1.5f, Mathf.Clamp01(magnitude / 80));
-                float lead = magnitude * PassByPeakSeconds / pitch;
+                // A recording's peak lead can exceed the entire traffic pool at extreme
+                // speeds. Trigger within the visible approach instead of missing every car.
+                float lead = Mathf.Min(magnitude * PassByPeakSeconds / pitch, World.DrawDistance * .5f);
                 bool crossing = relativeSpeed < 0 ? previousTraffic[n] > lead && distance <= lead : previousTraffic[n] < -lead && distance >= -lead;
-                if (continuous && trafficObserved[n] && SoundEnabled && magnitude > 2 && crossing && Mathf.Abs(distance - previousTraffic[n]) < 10 &&
+                float relativeBudget = movementBudget + HighwayTraffic.MaximumVehicleSpeedKmh / 3.6f * Mathf.Min(Time.deltaTime, .05f);
+                if (continuous && trafficObserved[n] && SoundEnabled && magnitude > 2 && crossing && Mathf.Abs(distance - previousTraffic[n]) <= relativeBudget &&
                     Time.unscaledTime - lastVehicleSound[n] > 1)
                 {
                     float dx = lane - World.LateralPosition;
@@ -267,10 +272,10 @@ namespace HighwaySurfing
             previousLamp = lamp; previousRoute = route; observing = active;
         }
 
-        bool PlayPass(AudioClip clip, float gain, float pan, float pitch)
+        bool PlayPass(AudioClip clip, float gain, float pan, float pitch, int voiceLimit = 8)
         {
             if (clip == null || RideFade < .3f) return false;
-            for (int n = 0; n < passes.Length; n++)
+            for (int n = 0; n < Mathf.Min(passes.Length, voiceLimit); n++)
             {
                 var source = passes[n];
                 if (source.isPlaying) continue;

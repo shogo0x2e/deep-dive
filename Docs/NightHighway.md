@@ -10,7 +10,7 @@ Mac・Kinectなしで試す場合は `Assets/Scenes/Sandbox/HighwayKeyboard.unit
 - R: 開始位置・姿勢に戻す。
 - H: 操作用HUDを表示 / 非表示。
 
-`NightHighway` の Inspector で速度、視野角、視点の高さ、横移動速度、カメラの傾きを調整できます。標準速度は138 km/hです。**Ride > Maximum Speed Kmh** は初期220で、400 km/hまで変更できます。周囲の車は各車ごとに80〜120 km/hのランダムな固定速度で走ります。操作用HUDはOBS向けのカメラ映像に含みません。
+`NightHighway` の Inspector で速度、視野角、視点の高さ、横移動速度、カメラの傾きを調整できます。標準速度は138 km/hです。**Ride > Maximum Speed Kmh** は初期220で、10,000 km/hまで変更できます。周囲の車は各車ごとに80〜120 km/hのランダムな固定速度で走ります。操作用HUDはOBS向けのカメラ映像に含みません。
 
 KinectHighwayInputが `UseExternalSteering`、`SteeringInput`、`ExternalRideReady`、`ExternalSteeringAvailable` を設定します。道路に沿う前進と横移動は独立し、入力が失われたフレームで横移動を止めます。
 

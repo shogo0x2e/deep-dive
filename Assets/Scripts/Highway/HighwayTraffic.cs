@@ -28,6 +28,7 @@ namespace HighwaySurfing
         const float RearLimit = -180f;
         public const float MinimumVehicleSpeedKmh = 80f;
         public const float MaximumVehicleSpeedKmh = 120f;
+        public const float MaximumSupportedPlayerSpeedKmh = 10000f;
 
         struct Vehicle
         {
@@ -73,7 +74,7 @@ namespace HighwaySurfing
         {
             this.drawDistance = Mathf.Max(500f, drawDistance);
             this.dense = dense;
-            this.maximumPlayerSpeedKmh = Mathf.Clamp(maximumPlayerSpeedKmh, 1, 400);
+            this.maximumPlayerSpeedKmh = Mathf.Clamp(maximumPlayerSpeedKmh, 1, MaximumSupportedPlayerSpeedKmh);
             ClearCorridorCentre = Mathf.Clamp(clearCorridorCentre, -9.5f, -1.5f);
             // Allow time to react to newly spawned traffic. Independent constant speeds can
             // close these gaps later: the player may need to brake behind a group of cars.

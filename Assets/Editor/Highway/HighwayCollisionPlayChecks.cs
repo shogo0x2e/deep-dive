@@ -19,9 +19,9 @@ public static class HighwayCollisionPlayChecks
     static int scenario, stage, impactBaseline, assertions;
     static double since;
     static readonly List<string> results = new List<string>();
-    static readonly float[] Speeds = {220,220,138,138,100,0,400};
-    static readonly float[] Losses = {30,30,10,100,30,30,30};
-    static readonly string[] Names = {"enabled 30%", "disabled", "custom 10%", "full stop 100%", "equal-speed side contact", "stationary rear contact", "400 km/h contact"};
+    static readonly float[] Speeds = {220,220,138,138,100,0,400,10000};
+    static readonly float[] Losses = {30,30,10,100,30,30,30,30};
+    static readonly string[] Names = {"enabled 30%", "disabled", "custom 10%", "full stop 100%", "equal-speed side contact", "stationary rear contact", "400 km/h contact", "10000 km/h contact"};
 
     [MenuItem("Tools/Highway Surfing/Checks/Collision Slowdown (Play)")]
     public static void Run() => Debug.Log(Start());
@@ -46,7 +46,7 @@ public static class HighwayCollisionPlayChecks
     }
     static void Prepare()
     {
-        world.MaximumSpeedKmh=scenario==6?400:220;
+        world.MaximumSpeedKmh=scenario>=6?Speeds[scenario]:220;
         world.ResetRide(); world.SpeedKmh=Speeds[scenario];
         world.CollisionSlowdownEnabled=scenario!=1; world.CollisionSpeedLossPercent=Losses[scenario];
         world.TrySampleTraffic(0,out _,out float lane,out _);

@@ -9,7 +9,7 @@ namespace HighwaySurfing
     {
         public KinectHighwayInput Input;
         public bool EnableArmSpeed = true;
-        [Range(0, 400)] public float StartingSpeedKmh = 138;
+        [Range(0, HighwayTraffic.MaximumSupportedPlayerSpeedKmh)] public float StartingSpeedKmh = 138;
         [Range(2, 20)] public float ThresholdDegrees = 8;
         [Range(15, 60)] public float FullScaleDegrees = 28;
         [Range(1, 80)] public float AccelerationKmhPerSecond = 30;

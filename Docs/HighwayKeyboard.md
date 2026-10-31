@@ -12,7 +12,9 @@ Kinectの起動・ポーズ登録・Spout送信は行わず、通常のGame View
 | R | 最初の高速・位置・開始速度・車配置へ戻す |
 | H | 試遊HUDの表示切替 |
 
-初速は138 km/h、標準の速度範囲は0〜220 km/hです。`NightHighway` → **Night Highway World > Ride > Maximum Speed Kmh** で上限を変更でき、400 km/hまで設定できます（初期220）。キーボード・Kinect・待機デモ・Rリセットに共通で適用されます。保持するにはPlay停止後に変更してシーンを保存してください。キーボードの最大加速は30 km/h毎秒、ブレーキは60 km/h毎秒で、Kinectの既定値と共通の速度更新処理を使います。左右移動は3.5 m/sです。Game Viewにキー入力のフォーカスを置いて操作してください。
+初速は138 km/h、標準の速度範囲は0〜220 km/hです。`NightHighway` → **Night Highway World > Ride > Maximum Speed Kmh** で上限を変更でき、10,000 km/hまで設定できます（初期220）。キーボード・Kinect・待機デモ・Rリセットに共通で適用されます。保持するにはPlay停止後に変更してシーンを保存してください。キーボードの最大加速は30 km/h毎秒、ブレーキは60 km/h毎秒で、Kinectの既定値と共通の速度更新処理を使います。左右移動は3.5 m/sです。Game Viewにキー入力のフォーカスを置いて操作してください。
+
+速度をすぐ比較したい場合は、Play中に **Maximum Speed Kmh** を上げてから **Speed Kmh** に現在速度を直接入力できます。Mainの開始速度は **Kinect Arm Speed Input > Starting Speed Kmh** で設定します。別モードはありません。標準の加減速度は維持しています。極端な速度でも視野角は110度までに抑え、移動・衝突は10 m以下の区間に分割して処理します。
 
 ## 高速道路の乗り換え
 
@@ -73,9 +75,9 @@ Unity 6000.3.26f1 のMac Editorで、道路・交通の数値チェックとPlay
 
 ローカルの試遊記録は `.Local/Review/highway-trial.txt`、画面は `Assets/.Local/Review/` にあります（Git対象外）。
 
-衝突減速の実走検証は400 km/hも含む7シナリオ・37項目を通過しています。HighwayKeyboardをPlayして `Tools > Highway Surfing > Checks > Collision Slowdown (Play)` で再実行できます。実際の交通更新と接触イベントを使い、ON/OFF、30%・10%・100%、同速度での側面接触、停止中の後方接触、400 km/hでの接触、連続接触、再加速、リセットを確認します。結果はConsoleと `.Local/Review/highway-collision-trial.txt` に出力し、設定はテスト前の値へ戻します。
+衝突減速の実走検証は10,000 km/hも含む8シナリオ・42項目を通過しています。HighwayKeyboardをPlayして `Tools > Highway Surfing > Checks > Collision Slowdown (Play)` で再実行できます。実際の交通更新と接触イベントを使い、ON/OFF、30%・10%・100%、同速度での側面接触、停止中の後方接触、400/10,000 km/hでの接触、連続接触、再加速、リセットを確認します。結果はConsoleと `.Local/Review/highway-collision-trial.txt` に出力し、設定はテスト前の値へ戻します。
 
-上限60/220/400 km/hでキーボード・共通腕入力・デモ・リセット・移動距離の21項目、交通1,440ケース、車の世界位置357,984サンプルと視界外再配置552回を検証しました。
+上限60/220/400/10,000 km/hでキーボード・共通腕入力・デモ・リセット・視野角・移動距離の32項目、交通1,440ケース、車の世界位置363,168サンプルと視界外再配置924回を検証しました。
 
 速度変更の検証はPlay中の `SpeedLimitChecks.Run()`、長時間の交通検証は `DenseTrafficChecks.Run()`、車の分岐前後の連続性と視界外再配置は `HighwayTrafficContinuityChecks.Run()` で再実行できます。
 
