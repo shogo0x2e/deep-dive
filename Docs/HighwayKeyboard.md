@@ -47,7 +47,7 @@ Kinectの起動・ポーズ登録・Spout送信は行わず、通常のGame View
 
 Play中もON/OFFと減速量を変更できます。翌回以降も使う設定はPlay停止後に変更してシーンを保存してください。Rで速度は開始時の値へ戻り、減速設定は維持します。
 
-`HighwayImpactFeedback` の `ImpactStrength / ImpactVolume` で調整できます。既存の `HighwayRideFeedback` の音・エフェクトON/OFFとMasterVolumeにも従います。
+`HighwayImpactFeedback` の `ImpactStrength / ImpactVolume` で調整できます。衝突音は約0.5秒の鈍い低音で、初期 `Impact Volume` は0.85です。小さい接触でも聞こえる音量を確保し、Play開始時に音源を準備します。`Duck Ride Sound`（初期ON）は衝突直後に駆動音・通過音を25%まで下げ、約0.42秒で戻して低音同士の埋もれを抑えます。OFFにすると一時的な音量調整だけを無効化します。既存の `HighwayRideFeedback` の音・エフェクトON/OFFとMasterVolumeにも従います。
 
 駆動音には低い推進音を重ねています。`HighwayRideFeedback` の `Bass Volume`（初期0.8）で低音の厚みを調整し、`Bass Enabled` で従来の音と比較できます。加速で厚く、ブレーキで弱まり、停止・一時停止ではフェードします。元のモーター音の大きさは `Motor Volume` で別に調整できます。
 
@@ -64,7 +64,7 @@ Unity 6000.3.26f1 のMac Editorで、道路・交通の数値チェックとPlay
 - 道路1,901アサーションを通過。分岐・合流の位置と向きの連続性、実距離と走行速度、次の分岐の4通りの選択、既存道路の固定、左側からの並走合流、対向車線の上空通過、リセットを確認。
 - 交通40項目を通過。24シードでの再現性・速度変更後の車間、高速での通過、側面接触、停止中の追い越し、8 m/sへ横移動速度を調整した場合の判定を含む。
 - 実際のInput Systemキーボードイベントを使うPlay検証18項目を通過。操舵、加減速、速度維持、一時停止、R、左右の経路選択、実車両接触からの演出を確認。
-- 衝突AudioSourceの非ゼロ波形と、同じ接触での重複発火がないことを確認。
+- 衝突音の事前準備、実出力の音量、全体のミックスの余裕、音・画面効果・一時的な走行音の減衰の切替を26項目で確認。同じ接触での重複発火もありません。音のチェックはPlay中に `Tools > Highway Surfing > Checks > Impact Audio (Play)` から再実行できます。
 - コンパイルエラー・Play中の例外は0。スクリーンショット取得時のMetal警告、および音声デバイス変更時の再初期化警告を記録。衝突AudioSourceの出力は最終試験でも確認済み。
 
 ローカルの試遊記録は `.Local/Review/highway-trial.txt`、画面は `Assets/.Local/Review/` にあります（Git対象外）。

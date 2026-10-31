@@ -1317,7 +1317,8 @@ MonoBehaviour:
   RideFeedback: {fileID: 1974920601}
   ImpactMaterial: {fileID: 0}
   ImpactStrength: 1
-  ImpactVolume: 0.55
+  ImpactVolume: 0.85
+  DuckRideSound: 1
 --- !u!114 &1974920601
 MonoBehaviour:
   m_ObjectHideFlags: 0

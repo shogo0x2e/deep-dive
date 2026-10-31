@@ -12,7 +12,11 @@ namespace HighwaySurfing
         [Tooltip("Optional override; otherwise the ride feedback's streak material is used.")]
         public Material ImpactMaterial;
         [Range(0, 2)] public float ImpactStrength = 1;
-        [Range(0, 1)] public float ImpactVolume = .55f;
+        [Tooltip("Volume of the low impact thud, independent of the camera effect strength.")]
+        [Range(0, 1)] public float ImpactVolume = .85f;
+        [Tooltip("Briefly lower drive and pass-by sounds so the impact's low thud stays audible.")]
+        public bool DuckRideSound = true;
+        public AudioSource ImpactSource => source;
         public int HitCount { get; private set; }
         public float LastStrength { get; private set; }
         public bool IsImpactActive => impactAge < Duration || (source != null && source.isPlaying);
@@ -39,6 +43,8 @@ namespace HighwaySurfing
         void OnEnable()
         {
             BindWorld();
+            // Prepare the non-streaming clip before the first hit, including on Windows.
+            EnsureAudio();
         }
 
         void BindWorld()
@@ -76,17 +82,19 @@ namespace HighwaySurfing
             direction = hit.LateralOffset >= 0 ? -1 : 1;
             impactAge = 0;
             EnsureAudio();
-            if (source != null && (RideFeedback == null || RideFeedback.SoundEnabled))
+            if (source != null && Volume() > 0 && (RideFeedback == null || RideFeedback.SoundEnabled))
             {
                 source.Stop();
                 source.volume = Volume();
                 source.panStereo = Mathf.Clamp(hit.LateralOffset / 4, -.55f, .55f);
                 source.pitch = Mathf.Lerp(.92f, 1.12f, LastStrength);
                 source.Play();
+                if (DuckRideSound && RideFeedback != null) RideFeedback.DuckForImpact();
             }
         }
 
-        float Volume() => ImpactVolume * LastStrength * (RideFeedback != null ? RideFeedback.MasterVolume : 1);
+        // Even a side scrape needs an audible cue. Visual intensity is not an audio mute.
+        float Volume() => ImpactVolume * Mathf.Lerp(.7f, 1, LastStrength) * (RideFeedback != null ? RideFeedback.MasterVolume : 1);
 
         void LateUpdate()
         {
@@ -149,31 +157,38 @@ namespace HighwaySurfing
             }
             source = generated.AddComponent<AudioSource>();
             source.playOnAwake = false; source.loop = false; source.spatialBlend = 0;
-            source.dopplerLevel = 0; source.priority = 64;
+            source.dopplerLevel = 0; source.priority = 32;
             if (clip == null) clip = MakeImpactClip();
             source.clip = clip;
         }
 
         static AudioClip MakeImpactClip()
         {
-            const int rate = 22050;
-            const int count = 6174; // 280 ms, cached for the lifetime of the component.
+            const int rate = 44100;
+            const int count = 22050; // 500 ms; preloaded once, with a soft, low tail.
             var samples = new float[count];
             uint random = 0x7451u;
-            float low = 0, phase = 0;
+            float low = 0, bodyNoise = 0, phase = 0, peak = 0;
             for (int i = 0; i < count; i++)
             {
                 float t = i / (float)rate;
                 random = 1664525u * random + 1013904223u;
                 float noise = ((random >> 8) / 8388607.5f) - 1;
-                low += .12f * (noise - low);
-                phase += 2 * Mathf.PI * Mathf.Lerp(105, 55, Mathf.Clamp01(t / .13f)) / rate;
-                float thunk = Mathf.Sin(phase) * Mathf.Exp(-t * 28) * .48f;
-                float scrape = (noise - low) * Mathf.Exp(-t * 19) * .12f + low * Mathf.Exp(-t * 17) * .17f;
-                float attack = Mathf.Min(1, t / .0025f);
-                samples[i] = Mathf.Clamp((thunk + scrape) * attack, -1, 1);
+                low += .015f * (noise - low);
+                bodyNoise += .07f * (noise - bodyNoise);
+                phase += 2 * Mathf.PI * Mathf.Lerp(108, 68, Mathf.Clamp01(t / .20f)) / rate;
+                // Weight and rounded body in the low band; no sharp metallic crack or hiss.
+                // Quiet 2nd/3rd harmonics keep the thud audible on smaller venue speakers.
+                float thunk = (Mathf.Sin(phase) * .62f + Mathf.Sin(phase * 2 + .2f) * .25f +
+                    Mathf.Sin(phase * 3 + .35f) * .12f) * Mathf.Exp(-t * 9.5f);
+                float knock = (bodyNoise - low) * Mathf.Exp(-t * 20) * .55f + low * Mathf.Exp(-t * 12) * .3f;
+                float attack = Mathf.Min(1, t / .004f);
+                float release = Mathf.Clamp01((.5f - t) / .035f);
+                samples[i] = (thunk + knock) * attack * release;
+                peak = Mathf.Max(peak, Mathf.Abs(samples[i]));
             }
-            var result = AudioClip.Create("Synthesized vehicle impact", count, 1, rate, false);
+            for (int i = 0; i < count; i++) samples[i] *= .95f / Mathf.Max(.001f, peak);
+            var result = AudioClip.Create("Low vehicle impact thud", count, 1, rate, false);
             result.hideFlags = HideFlags.DontSave;
             result.SetData(samples, 0);
             return result;

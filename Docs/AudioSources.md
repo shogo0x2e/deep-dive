@@ -47,3 +47,8 @@ Mac validation: loop continuity, zero DC, peak bounds and all 221 integer speeds
 ## Limits to assess by ear
 
 This is a processed, short field recording, not an isolated multi-RPM studio session. Listen for a periodic texture, thin/harsh high frequencies, residual road noise, and the relative level of pass-bys. Frequency and level checks establish signal behavior; speaker quality and the user's preferred timbre need in-person evaluation.
+
+
+## 衝突の低音（2026-10-31）
+
+`HighwayImpactFeedback` がオリジナルの約0.5秒の鈍い衝突音を合成し、Play開始時に準備します。108→68 Hzの低い胴鳴り、控えめな倍音とローパスした衝撃音を重ね、ピークを0.95に整えています。外部素材・追加ライセンスはありません。初期音量0.85、短い走行音の減衰で駆動低音への埋もれを抑えます。

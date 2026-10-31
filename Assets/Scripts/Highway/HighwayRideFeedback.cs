@@ -44,6 +44,7 @@ namespace HighwaySurfing
         public bool UsingMotorLoops { get; private set; }
         public Vector3 MotorBandWeights { get; private set; }
         public IReadOnlyList<AudioSource> MotorBandSources => motors;
+        public float ImpactMixGain { get; private set; } = 1;
 
         GameObject generated;
         Mesh roadMesh, screenMesh;
@@ -56,6 +57,7 @@ namespace HighwaySurfing
         float motorSpeed, motorGain;
         AudioClip bassClip;
         float bassGain;
+        float impactDuckAge = 1;
         readonly AudioSource[] passes = new AudioSource[8];
         readonly float[] passAge = new float[8], passPitch = new float[8], passGain = new float[8], passPan = new float[8];
         readonly float[] previousTraffic = new float[NightHighwayWorld.TrafficCount], lastVehicleSound = new float[NightHighwayWorld.TrafficCount];
@@ -74,6 +76,7 @@ namespace HighwaySurfing
             UsingMotorLoops = MotorLoops != null && MotorLoops.IsReady;
             motorSpeed = World.SpeedKmh; motorGain = 0;
             rideRevision = World.RideRevision;
+            impactDuckAge = 1; ImpactMixGain = 1;
             if (UsingMotorLoops)
             {
                 for (int n = 0; n < motors.Length; n++)
@@ -131,6 +134,12 @@ namespace HighwaySurfing
         }
         GameObject screenObject;
 
+        public void DuckForImpact()
+        {
+            impactDuckAge = 0;
+            ImpactMixGain = .25f;
+        }
+
         void LateUpdate()
         {
             if (generated == null || World == null || World.MainCamera == null) return;
@@ -138,11 +147,14 @@ namespace HighwaySurfing
             if (rideRevision != World.RideRevision)
             {
                 observing = false; rideRevision = World.RideRevision;
+                impactDuckAge = 1; ImpactMixGain = 1;
                 for (int n = 0; n < passes.Length; n++) passes[n].Stop();
                 for (int n = 0; n < trafficObserved.Length; n++) { trafficObserved[n] = false; lastVehicleSound[n] = -10; }
             }
             bool registered = Input != null && Input.KinectMode ? Input.RideRegistered : !World.UseExternalSteering;
             bool active = !World.Paused && Time.timeScale > 0 && (!World.UseExternalSteering || World.ExternalRideReady);
+            impactDuckAge += dt;
+            ImpactMixGain = Mathf.SmoothStep(.25f, 1, Mathf.Clamp01((impactDuckAge - .12f) / .30f));
             if (registered && !wasRegistered)
             {
                 departureAge = 0; DepartureCount++;
@@ -160,7 +172,7 @@ namespace HighwaySurfing
             float bassTarget = SoundEnabled && BassEnabled ?
                 MasterVolume * BassVolume * RideFade * HighwayDriveBass.Gain(World.SpeedKmh, control) : 0;
             bassGain = Smooth(bassGain, bassTarget, dt, .18f);
-            BassSource.volume = bassGain;
+            BassSource.volume = bassGain * ImpactMixGain;
             BassSource.pitch = Smooth(BassSource.pitch, HighwayDriveBass.Pitch(World.SpeedKmh), dt, .3f);
             UpdatePasses(active, dt);
             // Registration is an event, so pause / brief tracking loss cannot retrigger the chime.
@@ -185,7 +197,7 @@ namespace HighwaySurfing
             motorGain = Smooth(motorGain, gain, dt, .18f);
             if (!UsingMotorLoops)
             {
-                MotorSource.volume = motorGain;
+                MotorSource.volume = motorGain * ImpactMixGain;
                 MotorSource.pitch = Smooth(MotorSource.pitch, Mathf.Lerp(.55f, 1.65f, speed), dt, .25f);
                 return;
             }
@@ -194,7 +206,7 @@ namespace HighwaySurfing
             MotorBandWeights = weights;
             for (int n = 0; n < motors.Length; n++)
             {
-                motors[n].volume = motorGain * weights[n];
+                motors[n].volume = motorGain * weights[n] * ImpactMixGain;
                 motors[n].pitch = pitches[n];
                 motorFilters[n].cutoffFrequency = Smooth(motorFilters[n].cutoffFrequency,
                     Mathf.Lerp(4500, 9000, speed) + load * 3000, dt, .18f);
@@ -214,7 +226,7 @@ namespace HighwaySurfing
                 // Real recordings already contain the passing Doppler shift. Keep their pitch steady.
                 source.pitch = passPitch[n] * (RecordedPassBy ? 1 : Mathf.Lerp(1.08f, .88f, phase));
                 source.panStereo = RecordedPassBy ? passPan[n] : passPan[n] * Mathf.Sin(phase * Mathf.PI);
-                source.volume = (SoundEnabled ? MasterVolume * PassByVolume : 0) * RideFade * passGain[n];
+                source.volume = (SoundEnabled ? MasterVolume * PassByVolume : 0) * RideFade * passGain[n] * ImpactMixGain;
             }
             float route = World.RouteDistance;
             float speed = World.SpeedKmh / 3.6f;
@@ -264,7 +276,7 @@ namespace HighwaySurfing
                 if (source.isPlaying) continue;
                 source.clip = clip;
                 passAge[n] = 0; passGain[n] = gain; passPan[n] = pan; passPitch[n] = pitch;
-                source.volume = MasterVolume * PassByVolume * RideFade * gain;
+                source.volume = MasterVolume * PassByVolume * RideFade * gain * ImpactMixGain;
                 source.panStereo = RecordedPassBy ? pan : pan * .2f;
                 source.pitch = pitch * (RecordedPassBy ? 1 : 1.08f);
                 source.Play(); return true;
@@ -344,6 +356,7 @@ namespace HighwaySurfing
             wasRegistered = false; departureAge = 10;
             observing = false;
             BassSource = null; bassGain = 0;
+            impactDuckAge = 1; ImpactMixGain = 1;
         }
 
         void OnDestroy() { if (bassClip != null) Destroy(bassClip); }
